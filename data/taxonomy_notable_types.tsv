@@ -1,0 +1,156 @@
+mid	profession	count	ambiguous1	level1	ambiguous2	level2	ambiguous3	level3
+<http://rdf.freebase.com/ns/m.022tfrk>	Deceased Person	10183	1	known for death	1	known for death	1	known for death
+<http://rdf.freebase.com/ns/m.05czkf7>	Disaster victim	50	0	known for death	0	known for death	0	known for death
+<http://rdf.freebase.com/ns/m.05czkfg>	Disaster survivor	7	0	known for death	0	known for death	0	known for death
+<http://rdf.freebase.com/ns/m.04kr>	Person	1182	0	general fame	0	general fame	0	general fame
+<http://rdf.freebase.com/ns/m.02kl65h>	Award Winner	1087	0	general fame	0	general fame	0	general fame
+N/A	[blank]	196	1	general fame	1	general fame	1	general fame
+<http://rdf.freebase.com/ns/m.04l4q52>	Noble person	113	0	general fame	0	general fame	0	general fame
+<http://rdf.freebase.com/ns/m.02kl653>	Award Nominee	84	0	general fame	0	general fame	0	general fame
+<http://rdf.freebase.com/ns/m.02_7frv>	Celebrity	23	0	general fame	0	general fame	0	general fame
+<http://rdf.freebase.com/ns/m.04_p5wz>	Hall of fame inductee	18	0	general fame	0	general fame	0	general fame
+<http://rdf.freebase.com/ns/m.02h7lkm>	Person Or Being In Fiction	11	1	general fame	1	general fame	1	general fame
+<http://rdf.freebase.com/ns/m.04p7ysz>	Family member	9	0	general fame	0	general fame	0	general fame
+<http://rdf.freebase.com/ns/m.05h1pwk>	Competitor	9	0	general fame	0	general fame	0	general fame
+<http://rdf.freebase.com/ns/m.02_3mdg>	Organization member	8	0	general fame	0	general fame	0	general fame
+<http://rdf.freebase.com/ns/m.02xm94t>	Event	6	0	general fame	0	general fame	0	general fame
+<http://rdf.freebase.com/ns/m.07vr926>	Shareholder	5	1	general fame	1	general fame	1	general fame
+<http://rdf.freebase.com/ns/m.03k0nkd>	Sponsored Recipient	4	1	general fame	1	general fame	1	general fame
+<http://rdf.freebase.com/ns/m.05bh60n>	Project participant	4	0	general fame	0	general fame	0	general fame
+<http://rdf.freebase.com/ns/m.01xryxh>	Literature Subject	3	1	general fame	1	general fame	1	general fame
+<http://rdf.freebase.com/ns/m.02hyl3y>	Quotation Subject	1	0	general fame	0	general fame	0	general fame
+<http://rdf.freebase.com/ns/m.02k6s39>	Interviewee	1	0	general fame	0	general fame	0	general fame
+<http://rdf.freebase.com/ns/m.02k8f_w>	Family name	1	0	general fame	0	general fame	0	general fame
+<http://rdf.freebase.com/ns/m.02knxz7>	Deity	1	0	general fame	0	general fame	0	general fame
+<http://rdf.freebase.com/ns/m.05swz4j>	Social network user	1	0	general fame	0	general fame	0	general fame
+<http://rdf.freebase.com/ns/m.063dc2r>	Appointee	1	0	general fame	0	general fame	0	general fame
+<http://rdf.freebase.com/ns/m.07zmp_r>	Department	1	0	general fame	0	general fame	0	general fame
+<http://rdf.freebase.com/ns/m.0jsg4j>	Film actor	3688	0	art	0	film industry	0	actor
+<http://rdf.freebase.com/ns/m.01xrzlq>	TV Actor	536	0	art	0	film industry	0	actor
+<http://rdf.freebase.com/ns/m.0bgm3n7>	Person or entity appearing in film	214	0	art	0	film industry	1	actor
+<http://rdf.freebase.com/ns/m.02nzl9_>	TV Personality	147	0	art	0	film industry	1	actor
+<http://rdf.freebase.com/ns/m.0252jw8>	Theater Actor	51	0	art	0	film industry	0	actor
+<http://rdf.freebase.com/ns/m.021_gl6>	Film subject	9	0	art	0	film industry	1	actor
+<http://rdf.freebase.com/ns/m.01xrzlj>	TV Character	3	0	art	0	film industry	0	actor
+<http://rdf.freebase.com/ns/m.05pt029>	TV program guest	3	0	art	0	film industry	1	actor
+<http://rdf.freebase.com/ns/m.02907pl>	Video Game Actor	2	0	art	0	film industry	0	actor
+<http://rdf.freebase.com/ns/m.0bzy_sb>	TV subject	1	0	art	0	film industry	1	actor
+<http://rdf.freebase.com/ns/m.0dfzkn5>	Music video performer	1	1	art	1	film industry	1	actor
+<http://rdf.freebase.com/ns/m.0jsg3d>	Film director	905	0	art	0	film industry	0	director/producer
+<http://rdf.freebase.com/ns/m.0jsg3l>	Film producer	231	0	art	0	film industry	0	director/producer
+<http://rdf.freebase.com/ns/m.01xrzmg>	TV Producer	144	0	art	0	film industry	0	director/producer
+<http://rdf.freebase.com/ns/m.01xrzm2>	TV Director	29	0	art	0	film industry	0	director/producer
+<http://rdf.freebase.com/ns/m.0252jtd>	Theater Producer	21	0	art	0	film industry	0	director/producer
+<http://rdf.freebase.com/ns/m.08l646s>	Film art director	17	0	art	0	film industry	0	director/producer
+<http://rdf.freebase.com/ns/m.08l62ms>	Film casting director	16	0	art	0	film industry	0	director/producer
+<http://rdf.freebase.com/ns/m.05k5hzh>	Music video director	5	1	art	1	film industry	1	director/producer
+<http://rdf.freebase.com/ns/m.0252jtl>	Theater Director	4	0	art	0	film industry	0	director/producer
+<http://rdf.freebase.com/ns/m.01xr_cq>	TV station owner	1	0	art	0	film industry	0	supporting film role
+<http://rdf.freebase.com/ns/m.0jsg3z>	Film cinematographer	139	0	art	0	film industry	0	supporting film role
+<http://rdf.freebase.com/ns/m.01xrzlx>	TV Writer	127	0	art	0	film industry	0	supporting film role
+<http://rdf.freebase.com/ns/m.02_6zn1>	Film crewmember	107	0	art	0	film industry	0	supporting film role
+<http://rdf.freebase.com/ns/m.01z10_q>	Film story contributor	102	0	art	0	film industry	0	supporting film role
+<http://rdf.freebase.com/ns/m.02xyp8j>	Film costumer designer	88	0	art	0	film industry	0	supporting film role
+<http://rdf.freebase.com/ns/m.01xrzkl>	TV Program Creator	75	0	art	0	film industry	0	supporting film role
+<http://rdf.freebase.com/ns/m.0jsg44>	Film editor	71	0	art	0	film industry	0	supporting film role
+<http://rdf.freebase.com/ns/m.08l63hs>	Film production designer	49	0	art	0	film industry	0	supporting film role
+<http://rdf.freebase.com/ns/m.08l6t9d>	Film set decorator	13	0	art	0	film industry	0	supporting film role
+<http://rdf.freebase.com/ns/m.0kpyrz>	Film critic	7	0	art	0	film industry	0	supporting film role
+<http://rdf.freebase.com/ns/m.0252jvb>	Theater Designer	6	0	art	0	film industry	0	supporting film role
+<http://rdf.freebase.com/ns/m.0252jts>	Theater Choreographer	2	0	art	0	film industry	0	supporting film role
+<http://rdf.freebase.com/ns/m.0jsg3s>	Film writer	211	0	art	0	film industry	0	supporting film role
+<http://rdf.freebase.com/ns/m.0kpv1m>	Musical Artist	2422	0	art	0	music	0	performer
+<http://rdf.freebase.com/ns/m.0kpv1_>	Musician	355	0	art	0	music	0	performer
+<http://rdf.freebase.com/ns/m.0kpymf>	Conductor	60	0	art	0	music	0	performer
+<http://rdf.freebase.com/ns/m.0kpyp4>	Opera singer	27	0	art	0	music	0	performer
+<http://rdf.freebase.com/ns/m.0kpyt8>	Guitarist	24	0	art	0	music	0	performer
+<http://rdf.freebase.com/ns/m.0kpyr6>	Bassist	13	0	art	0	music	0	performer
+<http://rdf.freebase.com/ns/m.0kpync>	Drummer	8	0	art	0	music	0	performer
+<http://rdf.freebase.com/ns/m.0kpytg>	Songwriter	28	0	art	0	music	0	other music role
+<http://rdf.freebase.com/ns/m.025dxyh>	Opera Director	3	0	art	0	music	0	other music role
+<http://rdf.freebase.com/ns/m.0kpysb>	Composer	605	0	art	0	music	0	other music role
+<http://rdf.freebase.com/ns/m.0jsg4b>	Film music contributor	115	1	art	0	music	0	other music role
+<http://rdf.freebase.com/ns/m.0kpynz>	Record Producer	60	0	art	0	music	0	other music role
+<http://rdf.freebase.com/ns/m.02nmm_z>	Lyricist	41	0	art	0	music	0	other music role
+<http://rdf.freebase.com/ns/m.03z1q78>	Recording Engineer	2	0	art	0	music	0	other music role
+<http://rdf.freebase.com/ns/m.01xryvt>	Author	3785	0	art	0	written	0	written
+<http://rdf.freebase.com/ns/m.02hrmwq>	Fictional Character Creator	22	0	art	0	written	0	written
+<http://rdf.freebase.com/ns/m.02h7_57>	Comic Strip Creator	11	0	art	0	written	0	written
+<http://rdf.freebase.com/ns/m.02hqqhn>	Comic Book Creator	9	0	art	0	written	0	written
+<http://rdf.freebase.com/ns/m.02h7kvf>	Blogger	7	0	art	0	written	0	written
+<http://rdf.freebase.com/ns/m.09gs117>	Periodical editor	6	0	art	0	written	0	written
+<http://rdf.freebase.com/ns/m.01xryvm>	Book	1	0	art	0	written	0	written
+<http://rdf.freebase.com/ns/m.02hqb6w>	Comic Book Writer	1	0	art	0	written	0	written
+<http://rdf.freebase.com/ns/m.02k9ydg>	Newspaper Owner	1	0	art	0	written	0	written
+<http://rdf.freebase.com/ns/m.01y2hcj>	Visual Artist	556	0	art	0	visual	0	visual
+<http://rdf.freebase.com/ns/m.03jz7mq>	Illustrator	4	0	art	0	visual	0	visual
+<http://rdf.freebase.com/ns/m.02hqb5y>	Comic Book Penciler	5	0	art	0	visual	0	visual
+<http://rdf.freebase.com/ns/m.02hqb55>	Comic Book Inker	3	0	art	0	visual	0	visual
+<http://rdf.freebase.com/ns/m.02hqb4f>	Comic Book Colorist	1	0	art	0	visual	0	visual
+<http://rdf.freebase.com/ns/m.02hqb5k>	Comic Book Letterer	1	0	art	0	visual	0	visual
+<http://rdf.freebase.com/ns/m.01xljt3>	Architect	117	1	art	1	other art	1	other art
+<http://rdf.freebase.com/ns/m.043vwp8>	Broadcast Artist	53	0	art	0	other art	0	other art
+<http://rdf.freebase.com/ns/m.049xqrq>	Chef	13	0	art	0	other art	0	other art
+<http://rdf.freebase.com/ns/m.05czvmf>	Fashion designer	13	0	art	0	other art	0	other art
+<http://rdf.freebase.com/ns/m.021y6py>	Video Game Designer	5	0	art	0	other art	0	other art
+<http://rdf.freebase.com/ns/m.025m0dz>	Ship Designer	5	0	art	0	other art	0	other art
+<http://rdf.freebase.com/ns/m.0220pg2>	Game designer	4	0	art	0	other art	0	other art
+<http://rdf.freebase.com/ns/m.02ht32z>	Automotive Designer	3	0	art	0	other art	0	other art
+<http://rdf.freebase.com/ns/m.05cglht>	Collector	3	0	art	0	other art	0	other art
+<http://rdf.freebase.com/ns/m.01y2hc4>	Museum director	2	0	art	0	other art	0	other art
+<http://rdf.freebase.com/ns/m.05cgljk>	Hobbyist	1	1	art	1	other art	1	other art
+<http://rdf.freebase.com/ns/m.01xljr7>	Football player	1344	0	sports	0	athlete	0	athlete
+<http://rdf.freebase.com/ns/m.02h7c7b>	Athlete	1092	0	sports	0	athlete	0	athlete
+<http://rdf.freebase.com/ns/m.048n9y1>	Olympic athlete	687	0	sports	0	athlete	0	athlete
+<http://rdf.freebase.com/ns/m.025698c>	Baseball Player	578	0	sports	0	athlete	0	athlete
+<http://rdf.freebase.com/ns/m.01xljrf>	American football player	534	0	sports	0	athlete	0	athlete
+<http://rdf.freebase.com/ns/m.01xrrch>	Basketball Player	228	0	sports	0	athlete	0	athlete
+<http://rdf.freebase.com/ns/m.02h5h_t>	Cricket Player	202	0	sports	0	athlete	0	athlete
+<http://rdf.freebase.com/ns/m.04_jj5n>	Boxer	155	0	sports	0	athlete	0	athlete
+<http://rdf.freebase.com/ns/m.025698r>	Ice hockey player	107	0	sports	0	athlete	0	athlete
+<http://rdf.freebase.com/ns/m.02ktb_s>	Cyclist	68	0	sports	0	athlete	0	athlete
+<http://rdf.freebase.com/ns/m.0kqggl>	Golfer	51	0	sports	0	athlete	0	athlete
+<http://rdf.freebase.com/ns/m.02nvwb5>	Chess Player	50	1	sports	1	athlete	1	athlete
+<http://rdf.freebase.com/ns/m.02kqgg2>	Australian Rules Footballer	50	0	sports	0	athlete	0	athlete
+<http://rdf.freebase.com/ns/m.02_6n0_>	Martial Artist	32	0	sports	0	athlete	0	athlete
+<http://rdf.freebase.com/ns/m.01xs041>	Mountaineer	21	0	sports	0	athlete	0	athlete
+<http://rdf.freebase.com/ns/m.02k84ns>	Cricket Bowler	20	0	sports	0	athlete	0	athlete
+<http://rdf.freebase.com/ns/m.025d8rl>	Tennis Player	15	0	sports	0	athlete	0	athlete
+<http://rdf.freebase.com/ns/m.025df57>	Tennis Tournament Champion	13	0	sports	0	athlete	0	athlete
+<http://rdf.freebase.com/ns/m.0cyvcch>	Drafted athlete	1	0	sports	0	athlete	0	athlete
+<http://rdf.freebase.com/ns/m.01xljvt>	American football head coach	57	0	sports	0	coach	0	coach
+<http://rdf.freebase.com/ns/m.01xrsjn>	Basketball Coach	48	0	sports	0	coach	0	coach
+<http://rdf.freebase.com/ns/m.029fbpr>	Ice hockey coach	3	0	sports	0	coach	0	coach
+<http://rdf.freebase.com/ns/m.0jsq5x1>	Sports team coach	3	0	sports	0	coach	0	coach
+<http://rdf.freebase.com/ns/m.0514pdp>	Baseball Coach	1	0	sports	0	coach	0	coach
+<http://rdf.freebase.com/ns/m.062z_1f>	Sports official	21	0	sports	0	other sports role	0	other sports role
+<http://rdf.freebase.com/ns/m.02k84vs>	Cricket Umpire	10	0	sports	0	other sports role	0	other sports role
+<http://rdf.freebase.com/ns/m.01xljxp>	Football team manager	9	0	sports	0	other sports role	0	other sports role
+<http://rdf.freebase.com/ns/m.025672j>	Sports Team Owner	3	0	sports	0	other sports role	0	other sports role
+<http://rdf.freebase.com/ns/m.025697_>	Baseball Manager	2	0	sports	0	other sports role	0	other sports role
+<http://rdf.freebase.com/ns/m.04stv46>	Golf Course Architect	2	0	sports	0	other sports role	0	other sports role
+<http://rdf.freebase.com/ns/m.025b7t1>	Sports League Award Winner	1	0	sports	0	other sports role	0	other sports role
+<http://rdf.freebase.com/ns/m.02xlh55>	Politician	2325	0	leadership	0	politics	0	politics
+<http://rdf.freebase.com/ns/m.05kpwk1>	U.S. Congressperson	170	0	leadership	0	politics	0	politics
+<http://rdf.freebase.com/ns/m.046x372>	Judge	59	0	leadership	0	politics	0	politics
+<http://rdf.freebase.com/ns/m.04fnrhx>	Monarch	7	0	leadership	0	politics	0	politics
+<http://rdf.freebase.com/ns/m.02h66g5>	Military Person	806	0	leadership	0	military	0	military
+<http://rdf.freebase.com/ns/m.02h77nv>	Military Commander	18	0	leadership	0	military	0	military
+<http://rdf.freebase.com/ns/m.05ffvtw>	Chivalric Order Member	87	0	leadership	0	military	0	military
+<http://rdf.freebase.com/ns/m.02knxzt>	Religious Leader	258	0	leadership	0	religion	0	religion
+<http://rdf.freebase.com/ns/m.02knxz_>	Religious Leadership Role	1	0	leadership	0	religion	0	religion
+<http://rdf.freebase.com/ns/m.02_77lg>	Organization founder	381	0	leadership	0	other leadership	0	other leadership
+<http://rdf.freebase.com/ns/m.02h51nz>	Organization leader	283	0	leadership	0	other leadership	0	other leadership
+<http://rdf.freebase.com/ns/m.03j41y_>	Academic	608	0	academia/engineering	0	academia/engineering	0	academia/engineering
+<http://rdf.freebase.com/ns/m.02k76m0>	Inventor	38	0	academia/engineering	0	academia/engineering	0	academia/engineering
+<http://rdf.freebase.com/ns/m.01xljxw>	Physician	37	0	academia/engineering	0	academia/engineering	0	academia/engineering
+<http://rdf.freebase.com/ns/m.021y8yh>	Astronaut	27	0	academia/engineering	0	academia/engineering	0	academia/engineering
+<http://rdf.freebase.com/ns/m.021ynvf>	Astronomer	22	0	academia/engineering	0	academia/engineering	0	academia/engineering
+<http://rdf.freebase.com/ns/m.0220thb>	Computer Scientist	22	0	academia/engineering	0	academia/engineering	0	academia/engineering
+<http://rdf.freebase.com/ns/m.02k6s1t>	Translator	14	0	academia/engineering	0	academia/engineering	0	academia/engineering
+<http://rdf.freebase.com/ns/m.01xljr1>	Surgeon	7	0	academia/engineering	0	academia/engineering	0	academia/engineering
+<http://rdf.freebase.com/ns/m.01xpjxn>	Aircraft designer	2	0	academia/engineering	0	academia/engineering	0	academia/engineering
+<http://rdf.freebase.com/ns/m.0b7mrwc>	Honorary Degree Recipient	2	0	academia/engineering	0	academia/engineering	0	academia/engineering
+<http://rdf.freebase.com/ns/m.02jcrkd>	Invention	1	0	academia/engineering	0	academia/engineering	0	academia/engineering
+<http://rdf.freebase.com/ns/m.04kcyl6>	Amusement Ride Designer	1	0	academia/engineering	0	academia/engineering	0	academia/engineering
+

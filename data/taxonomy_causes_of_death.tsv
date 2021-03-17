@@ -1,0 +1,197 @@
+mid	cause of death	count	ambiguous1	level1	ambiguous2	level2	ambiguous3	level3
+N/A	[blank]	29430	1	all	1	all	1	all
+<http://rdf.freebase.com/ns/m.02knxx>	Natural causes	533	0	natural	1	general	1	general
+<http://rdf.freebase.com/ns/m.027x3>	Disease	317	0	natural	1	general	1	general
+<http://rdf.freebase.com/ns/m.01jwdy>	Illness	19	0	natural	1	general	1	general
+<http://rdf.freebase.com/ns/m.01hbgs>	Old age	14	0	natural	1	general	1	general
+<http://rdf.freebase.com/ns/m.0qcr0>	Cancer	1391	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.04p3w>	Lung cancer	376	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.01_qc_>	Pancreatic cancer	260	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.0m32h>	Prostate cancer	165	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.04psf>	Leukemia	162	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.0j8hd>	Breast cancer	110	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.01dcqj>	Colorectal cancer	98	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.09969>	Brain tumor	89	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.03m3vr6>	Liver cancer	82	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.01mtqf>	Stomach cancer	70	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.0jdk0>	Lymphoma	61	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.01k9gb>	Esophageal cancer	53	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.04fnvtm>	Brain Cancer	52	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.01qqwn>	Multiple myeloma	40	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.025hl8>	Ovarian cancer	33	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.021plp>	Laryngeal cancer	31	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.01bcp7>	Bladder cancer	29	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.02kvl06>	Kidney cancer	21	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.035b2g>	Melanoma	21	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.0bx3n7>	Acute myeloid leukemia	14	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.01s1pg>	Mesothelioma	13	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.02wgfrt>	Bone cancer	13	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.0d_bk>	Cervical cancer	9	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.0jdj1>	Non-Hodgkin lymphoma	9	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.0259pl>	Uterine cancer	7	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.03_5ld>	Glioblastoma multiforme	7	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.04km8yl>	Throat Cancer	7	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.011wk5>	Thyroid cancer	6	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.0h9dj>	Skin cancer	6	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.03h0n8d>	Salivary gland neoplasm	5	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.03v9q6>	Cholangiocarcinoma	5	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.01n3bm>	Liver tumour	4	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.025hkl>	Oral cancer	4	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.02bg7m>	B-cell chronic lymphocytic leukemia	4	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.06trxr>	Gallbladder cancer	4	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.01t125>	Bone tumor	3	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.02qg4h>	Hodgkin's lymphoma	3	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.04kndz2>	Metastatic Melanoma	3	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.064jvdr>	Metastatic breast cancer	3	0	natural	0	long-term	0	cancer
+<http://rdf.freebase.com/ns/m.0dcsx>	Alzheimer's disease	244	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.0g02vk>	Parkinson's disease	159	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.01psyx>	Renal failure	148	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.0hk18>	Emphysema	58	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.0c58k>	Diabetes mellitus	48	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.017s1k>	Amyotrophic lateral sclerosis	45	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.08nhwb>	Respiratory disease	26	0	natural	1	long-term	1	other long-term
+<http://rdf.freebase.com/ns/m.09klv>	Dementia	22	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.0gzv0>	Chronic Obstructive Pulmonary Disease	21	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.047grmq>	Liver disease	17	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.097ns>	Cirrhosis	17	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.0kh3>	Motor neuron disease	13	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.0bbxtcj>	Pulmonary fibrosis	12	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.0dcqh>	Multiple sclerosis	12	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.035482>	Chronic kidney disease	11	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.0d19y2>	HIV/AIDS	10	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.019gky>	Myelodysplastic syndrome	9	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.02z63k>	Nephropathy	8	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.0260ph>	Pulmonary edema	7	0	natural	1	long-term	1	other long-term
+<http://rdf.freebase.com/ns/m.0c78m>	Asthma	7	0	natural	1	long-term	1	other long-term
+<http://rdf.freebase.com/ns/m.01s1m>	Coronary artery disease	6	0	natural	1	long-term	1	other long-term
+<http://rdf.freebase.com/ns/m.0542n>	Malaria	5	0	natural	1	long-term	1	other long-term
+<http://rdf.freebase.com/ns/m.09d11>	Meningitis	5	0	natural	1	long-term	1	other long-term
+<http://rdf.freebase.com/ns/m.0j90gsq>	Lung disease	5	0	natural	1	long-term	1	other long-term
+<http://rdf.freebase.com/ns/m.0k95h>	Hypertension	5	0	natural	1	long-term	1	other long-term
+<http://rdf.freebase.com/ns/m.0lp66>	Atherosclerosis	5	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.011zdm>	Peritonitis	4	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.03j8_2>	Multiple system atrophy	4	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.0dcp_>	Cystic fibrosis	4	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.0h1wz>	Pancreatitis	4	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.0lcdk>	Anemia	4	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.0hz7lnf>	prolonged illness	3	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.01h3g2>	Vascular dementia	3	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.02p29bx>	Amyloidosis	3	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.034z98>	Terminal illness	3	0	natural	1	long-term	1	other long-term
+<http://rdf.freebase.com/ns/m.047gmsk>	Bronchitis	3	0	natural	1	long-term	1	other long-term
+<http://rdf.freebase.com/ns/m.0513vg>	Progressive supranuclear palsy	3	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.07x16>	Urinary tract infection	3	0	natural	1	long-term	1	other long-term
+<http://rdf.freebase.com/ns/m.09jg8>	Hepatitis	3	0	natural	0	long-term	0	other long-term
+<http://rdf.freebase.com/ns/m.0djy52r>	Blood disorder	3	0	natural	1	long-term	1	other long-term
+<http://rdf.freebase.com/ns/m.0gk4g>	Myocardial infarction	900	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.01l2m3>	Heart failure	455	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.0dq9p>	Pneumonia	411	0	natural	1	short-term	1	short-term
+<http://rdf.freebase.com/ns/m.02y0js>	Stroke	364	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.0gg4h>	Cardiac arrest	248	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.019dmc>	Respiratory failure	101	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.02k6hp>	Cardiovascular disease	72	0	natural	1	short-term	1	short-term
+<http://rdf.freebase.com/ns/m.08g5q7>	Cerebral hemorrhage	54	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.0cd25>	Surgery	40	1	natural	1	short-term	1	short-term
+<http://rdf.freebase.com/ns/m.03hnn3>	Multiple organ dysfunction syndrome	31	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.054rzc>	Complication	31	0	natural	1	short-term	1	short-term
+<http://rdf.freebase.com/ns/m.02wgfrh>	Surgical complications	30	1	natural	1	short-term	1	short-term
+<http://rdf.freebase.com/ns/m.01ddth>	Pulmonary embolism	26	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.01g45j>	Intracranial aneurysm	26	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.07y4wsx>	Craniocerebral Trauma	26	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.014w_8>	Sepsis	25	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.02psvcf>	Liver failure	22	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.09k7lrr>	Complications of diabetes mellitus	20	0	natural	1	short-term	1	short-term
+<http://rdf.freebase.com/ns/m.0j5k070>	Lung Infection	19	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.0p367zp>	Complications from pneumonia	19	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.0bnyjd1>	Multiple organ failure	15	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.0wr0v87>	Complications from a stroke	15	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.01vpyv>	Aneurysm	14	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.098s1>	Infection	14	0	natural	1	short-term	1	short-term
+<http://rdf.freebase.com/ns/m.012n6x>	Bleeding	12	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.0hmvc3j>	Heart Ailment	11	0	natural	1	short-term	1	short-term
+<http://rdf.freebase.com/ns/m.03bnvh>	Aortic aneurysm	10	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.0cycc>	Influenza	10	0	natural	1	short-term	1	short-term
+<http://rdf.freebase.com/ns/m.018_rt>	Thrombus	6	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.0frm3>	Ebola virus disease	6	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.0j2qcln>	Complications from cardiac surgery	6	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.05k082>	Bronchopneumonia	5	0	natural	1	short-term	1	short-term
+<http://rdf.freebase.com/ns/m.018_pw>	Thrombosis	5	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.02xb32>	Internal bleeding	5	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.03h5f5>	Intracranial hemorrhage	5	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.04y5q8x>	Organ dysfunction	5	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.09xgz9>	Blunt trauma	5	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.01pf6>	Cardiac dysrhythmia	4	0	natural	1	short-term	1	short-term
+<http://rdf.freebase.com/ns/m.08xxj5>	Hypertensive heart disease	4	0	natural	1	short-term	1	short-term
+<http://rdf.freebase.com/ns/m.01p3jd>	Aortic dissection	4	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.035h27>	Subarachnoid hemorrhage	4	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.036slc>	Subdural hematoma	4	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.01q1sz>	Pneumothorax	3	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.01sbk1>	Brain damage	3	1	natural	1	short-term	1	short-term
+<http://rdf.freebase.com/ns/m.029mr9>	Septic shock	3	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.037c4l>	Respiratory arrest	3	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.03db4m>	Cardiac surgery	3	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.04306vn>	Pulmonary failure	3	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.04kfgwz>	Cardiopulmonary Arrest	3	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.05fc60s>	Cerebral infarction	3	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.06rhk>	Epileptic seizure	3	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.079l20g>	Heat Stroke	3	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.0k10t>	Hyperthermia	3	0	natural	0	short-term	0	short-term
+<http://rdf.freebase.com/ns/m.08q1tg>	Traffic collision	312	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.015xf8>	Aviation accident or incident	94	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.01g27f>	Drowning	47	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.04f32c6>	Falling	44	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.0kbfd>	Accident	37	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.02ws56q>	Motorcycle accident	10	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.022qfn9>	Helicopter crash	9	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.02wgfrn>	Accidental fall	9	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.0p7w5>	Asphyxia	9	0	unnatural	1	accident	1	accident
+<http://rdf.freebase.com/ns/m.02kh4w>	Injury	8	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.0428cn>	Traumatic brain injury	7	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.023b864>	Skiing accident	6	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.02769w>	Shark attack	5	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.02q7n0v>	Combined drug intoxication	5	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.02gkhm>	Carbon monoxide poisoning	4	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.03c8ld>	Major trauma	4	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.053f5>	Mountaineering	4	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.0gmcksk>	Brain injury	4	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.04fnvt9>	Boating Accident	3	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.0599xjp>	Falling from height	3	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.05nd4h4>	Struck by car	3	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.0dlgm7>	Bike accident	3	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.0vv4rl1>	Tornado Incident	3	0	unnatural	0	accident	0	accident
+<http://rdf.freebase.com/ns/m.0gykw>	Lethal injection	35	0	unnatural	0	intentional	0	execution
+<http://rdf.freebase.com/ns/m.01s5q>	Capital punishment	29	0	unnatural	0	intentional	0	execution
+<http://rdf.freebase.com/ns/m.052l5jw>	Execution	5	0	unnatural	0	intentional	0	execution
+<http://rdf.freebase.com/ns/m.0lz8d>	Execution by firing squad	4	0	unnatural	0	intentional	0	execution
+<http://rdf.freebase.com/ns/m.0cttd>	Torture	4	0	unnatural	0	intentional	0	execution
+<http://rdf.freebase.com/ns/m.025y89w>	Execution-style murder	3	0	unnatural	0	intentional	0	execution
+<http://rdf.freebase.com/ns/m.051_y>	Murder	121	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.02qnd1b>	Ballistic trauma	108	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.032s66>	Gunshot	92	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.02x52f>	Stabbing	31	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.012hw>	Assassination	26	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.034qg>	Firearm	24	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.0148xv>	Hanging	24	0	unnatural	1	intentional	1	murder-related
+<http://rdf.freebase.com/ns/m.02_41>	Fire	17	0	unnatural	1	intentional	1	murder-related
+<http://rdf.freebase.com/ns/m.0x2fg>	Homicide	13	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.01_hlk>	Strangling	10	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.01vsq3>	Airstrike	8	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.01n8xw>	Improvised bombing	7	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.0jb19>	Decapitation	7	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.02070z>	Killed in action	5	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.06d0mv>	Hit and run	5	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.078f4>	Suicide attack	5	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.053yl5>	Murder_suicide	4	0	unnatural	0	intentional	1	murder-related
+<http://rdf.freebase.com/ns/m.0dh11>	Poison	4	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.0h7nnqt>	Stab wound	4	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.014bmh>	Car bomb	3	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.014zdl>	Explosion	3	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.0ct4f>	Bomb	3	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.0v29>	Ambush	3	0	unnatural	0	intentional	0	murder-related
+<http://rdf.freebase.com/ns/m.06z5s>	Suicide	257	0	unnatural	0	intentional	0	self-inflicted
+<http://rdf.freebase.com/ns/m.01tf_6>	Drug overdose	50	0	unnatural	1	intentional	1	self-inflicted
+<http://rdf.freebase.com/ns/m.0h1cm8n>	Suicide by hanging	12	0	unnatural	0	intentional	0	self-inflicted
+<http://rdf.freebase.com/ns/m.02kp1qn>	Heroin overdose	5	0	unnatural	1	intentional	1	self-inflicted
+<http://rdf.freebase.com/ns/m.03bwz9y>	Assisted suicide	4	0	unnatural	0	intentional	0	self-inflicted
+<http://rdf.freebase.com/ns/m.02794>	Alcohol intoxication	3	0	unnatural	1	intentional	1	self-inflicted
+<http://rdf.freebase.com/ns/m.02qpjkw>	Self-inflicted wound	3	0	unnatural	0	intentional	0	self-inflicted

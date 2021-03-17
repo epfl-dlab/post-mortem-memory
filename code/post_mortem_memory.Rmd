@@ -1,0 +1,1554 @@
+---
+title: "Post-mortem memory of public figures in news and social media"
+author: "Robert West, Jure Leskovec, Christopher Potts"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r include=FALSE}
+# Begin of nasty trick from here: https://stackoverflow.com/a/46686678
+SUPP_INFO <- FALSE
+INCLUDE_REGRESSION_IN_SUPP_INFO <- TRUE
+```
+\newif\ifshowall
+\showall`r ifelse(!SUPP_INFO, 'true', 'false')`
+```{r include=FALSE}
+# End of nasty trick.
+# To exclude a text from the Supplemental Information (SI), wrap it in \ifshowall, \fi:
+#   \ifshowall
+#   This is not the SI
+#   \fi
+# Wrapped text is omitted from SI (LaTeX), but is shown in reproducibility script (HTML).
+
+# To hide warnings and messages: warning=FALSE, message=FALSE
+# To hide code but show output: echo=FALSE
+# To hide output but show code: results="hide"
+# To hide code and output: include=FALSE
+```
+
+```{r load data and functions, echo=!SUPP_INFO, results="hide", message=FALSE}
+# This script is self-contained, with the exceptions that some functions are located
+# in load_common_data_and_functions.r
+
+library(cluster)
+library(lattice)
+library(plotrix)
+library(gridExtra)
+library(KernSmooth)
+library(boot)
+library(parallel)
+library(texreg)
+library(nnet)
+library(xtable)
+library(lpSolve)
+library(knitr)
+
+source(sprintf('%s/github/post-mortem-memory/code/load_common_data_and_functions.r', Sys.getenv('HOME')))
+
+.default_par <- par(no.readonly=TRUE)
+
+# Set this to FALSE if you don't want to save plots to PDFs.
+# SAVE_PLOTS <- FALSE
+SAVE_PLOTS <- TRUE
+PLOTDIR <- sprintf('%s/plots/', BASEDIR)
+TABLEDIR <- sprintf('%s/tables/', BASEDIR)
+
+fignum <- 0
+tabnum <- 0
+figcap <- function(increment) {
+  if (increment) fignum <<- fignum + 1
+  sprintf('**%sFigure %s:** ', if (SUPP_INFO) 'Supplementary ' else '', fignum)
+}
+tabcap <- function(increment) {
+  if (increment) tabnum <<- tabnum + 1
+  sprintf('**%sTable %s:** ', if (SUPP_INFO) 'Supplementary ' else '', tabnum)
+}
+
+vertskip <- '$$\\\\[4mm]$$'
+
+# We aggregate chunk_size days; a value of 7 means we aggregate by weeks.
+CHUNK_SIZE <- 1
+
+COL <- list(NEWS=rgb(.9,.6,0), TWITTER=rgb(0,.45,.7))
+COL_LIGHT <- list(NEWS=rgb(.9,.6,0,.3), TWITTER=rgb(0,.45,.7,.3))
+COL_XLIGHT <- list(NEWS=rgb(.9,.6,0,.03), TWITTER=rgb(0,.45,.7,.03))
+COL_LIGHTBLUE <- "#56B4E9"
+COL_YELLOW <- "#F0E442"
+COL_DARKBLUE <- "#0072B2"
+COL_RED <- "#D55E00"
+COL_MAGENTA <- "#CC79A7"
+COL_GRAY <- "#999999"
+COL_ORANGE <- "#E69F00"
+COL_GREEN <- "#009E73"
+
+ANGLO_COUNTRY_REGEX <- 'United States|United Kingdom|Canada|England|Australia|Scotland|Wales|Ireland|New Zealand|South Africa'
+
+type_groups <- c('art', 'sports', 'leadership', 'known for death', 'general fame', 'academia/engineering')
+
+r <- function(x) {
+  n <- length(x)
+  # Keys: indices in x; values: ranks.
+  rank_map <- 1:n
+  names(rank_map) <- order(x)
+  rank_map[as.character(1:n)]
+}
+
+load_stats <- function(medium) {
+  if (medium != 'NEWS' && medium != 'TWITTER') {
+    stop('Medium must be \'NEWS\' or \'TWITTER\'')
+  }
+  stats <- read.table(sprintf('%s/mention_freq_for_spreadsheet_%s.csv', DATADIR, medium),
+                      header=TRUE, sep='\t', comment.char='', quote='')
+  rownames(stats) <- long_mid(stats$mid)
+  # If the person has 0 mentions on the day of death, the log will be -Inf.
+  # Replace those by the smallest finite number.
+  stats$peak_raw[!is.finite(stats$peak_raw)] <- min(stats$peak_raw[is.finite(stats$peak_raw)])
+  # Since the quantities are logarithmic (log10), taking the difference is equivalent to the log10
+  # of the ratio.
+  stats$peak_mean_boost <- stats$peak_raw - stats$mean_before
+  stats$peak_max_boost <- stats$peak_raw - stats$max_raw_before
+  stats$perm_boost <- stats$mean_after_peak - stats$mean_before
+  stats$perm_boost_all <- stats$mean_after - stats$mean_before
+  # Some rank transforms.
+  stats$mean_before_rank <- r(stats$mean_before)
+  stats$mean_after_rank <- r(stats$mean_after)
+  stats$peak_mean_boost_rank <- r(stats$peak_mean_boost)
+  stats$perm_boost_rank <- r(stats$perm_boost)
+  stats$perm_boost_all_rank <- r(stats$perm_boost_all)
+  stats$time_till_half_rank <- r(stats$time_till_half)
+  # Add a categorical death-type column.
+  stats$death_type <- 'unknown'
+  stats$death_type[stats$natural_death==1] <- 'natural'
+  stats$death_type[stats$unnatural_death==1] <- 'unnatural'
+  stats$death_type <- as.factor(stats$death_type)
+  # Add age groups.
+  stats$age_group <- floor(stats$age/10)*10
+  # Add anglo flag.
+  country_known <- props$mid[props$nationality!='']
+  anglos <- props$mid[grepl(ANGLO_COUNTRY_REGEX, props$nationality)]
+  stats$anglo <- 'unknown'
+  stats$anglo[rownames(stats) %in% country_known] <- 'non_anglo'
+  stats$anglo[rownames(stats) %in% anglos] <- 'anglo'
+  stats$anglo <- as.factor(stats$anglo)
+  # Notable types for all people.
+  types <- tax_types[strip_plaintext_name_from_mid(props$notable_types), 'level1']
+  names(types) <- props$mid
+  stats$type_group <- types[rownames(stats)]
+  return(stats)
+}
+
+# The stats of all people, rather than just the couple of thousands included in our study.
+load_stats_all <- function() {
+  stats_all <- props[props$mid %in% died_in_window, c('gender', 'age', 'cause_of_death', 'nationality', 'notable_types')]
+  stats_all$death_type <- 'unknown'
+  stats_all$death_type[rownames(stats_all) %in% names(which(get_cause_of_death_map()==1))] <- 'natural'
+  stats_all$death_type[rownames(stats_all) %in% names(which(get_cause_of_death_map()==-1))] <- 'unnatural'
+  stats_all$death_type <- as.factor(stats_all$death_type)
+  country_known <- rownames(stats_all)[stats_all$nationality!='']
+  anglos <- rownames(stats_all)[grepl(ANGLO_COUNTRY_REGEX, stats_all$nationality)]
+  stats_all$anglo <- 'unknown'
+  stats_all$anglo[rownames(stats_all) %in% country_known] <- 'non_anglo'
+  stats_all$anglo[rownames(stats_all) %in% anglos] <- 'anglo'
+  stats_all$anglo <- as.factor(stats_all$anglo)
+  types <- tax_types[strip_plaintext_name_from_mid(stats_all$notable_types), 'level1']
+  names(types) <- rownames(stats_all)
+  stats_all$type_group <- types[rownames(stats_all)]
+  return(stats_all)
+}
+
+make_bio_table <- function() {
+  to_percentage <- function(x) sprintf('%.0f%%', x*100)
+  summary_table_all <- NULL
+  summary_table_filtered <- NULL
+  summary_table_lm <- NULL
+  
+  ### Age
+  
+  summary_table_filtered['Age'] <- ''
+  summary_table_all['Age'] <- ''
+  summary_table_lm['Age'] <- ''
+  
+  summary_table_filtered['Age N/A'] <- to_percentage(mean(is.na(stats_N$age)))
+  summary_table_filtered[c('1st quartile', 'Mean', 'Median', '3rd quartile')] <- sprintf('%.0f', summary(stats_N$age)[c(2,4,3,5)])
+  summary_table_all['Age N/A'] <- to_percentage(mean(is.na(stats_all$age)))
+  summary_table_all[c('1st quartile', 'Mean', 'Median', '3rd quartile')] <- sprintf('%.0f', summary(stats_all$age[stats_all$age <= 120])[c(2,4,3,5)])
+  summary_table_lm['Age N/A'] <- to_percentage(mean(is.na(lmdata_N$age)))
+  summary_table_lm[c('1st quartile', 'Mean', 'Median', '3rd quartile')] <- sprintf('%.0f', summary(lmdata_N$age)[c(2,4,3,5)])
+  
+  ### Gender
+  
+  summary_table_filtered['Gender'] <- ''
+  summary_table_all['Gender'] <- ''
+  summary_table_lm['Gender'] <- ''
+  
+  idx <- stats_N$gender %in% c('Female', 'Male')
+  summary_table_filtered['Gender N/A'] <- to_percentage(mean(!idx))
+  summary_table_filtered[c('Female', 'Male')] <- to_percentage((summary(stats_N$gender[idx]) / sum(summary(stats_N$gender[idx])))[c('Female', 'Male')])
+  
+  idx <- stats_all$gender %in% c('Female', 'Male')
+  summary_table_all['Gender N/A'] <- to_percentage(mean(!idx))
+  summary_table_all[c('Female', 'Male')] <- to_percentage((summary(stats_all$gender[idx]) / sum(summary(stats_all$gender[idx])))[c('Female', 'Male')])
+  
+  idx <- lmdata_N$gender %in% c('Female', 'Male')
+  summary_table_lm['Gender N/A'] <- to_percentage(mean(!idx))
+  summary_table_lm[c('Female', 'Male')] <- to_percentage((summary(lmdata_N$gender[idx]) / sum(summary(lmdata_N$gender[idx])))[c('Female', 'Male')])
+  
+  ### Manner of death
+  
+  summary_table_filtered['Manner of death'] <- ''
+  summary_table_all['Manner of death'] <- ''
+  summary_table_lm['Manner of death'] <- ''
+  
+  idx <- stats_N$death_type != 'unknown'
+  summary_table_filtered['Manner of death N/A'] <- to_percentage(mean(!idx))
+  summary_table_filtered[c('Natural', 'Unnatural')] <-
+    to_percentage((summary(stats_N$death_type[idx]) / sum(summary(stats_N$death_type[idx])))[c('natural', 'unnatural')])
+  
+  idx <- stats_all$death_type != 'unknown'
+  summary_table_all['Manner of death N/A'] <- to_percentage(mean(!idx))
+  summary_table_all[c('Natural', 'Unnatural')] <-
+    to_percentage((summary(stats_all$death_type[idx]) / sum(summary(stats_all$death_type[idx])))[c('natural', 'unnatural')])
+  
+  idx <- lmdata_N$death_type != 'unknown'
+  summary_table_lm['Manner of death N/A'] <- to_percentage(mean(!idx))
+  summary_table_lm[c('Natural', 'Unnatural')] <-
+    to_percentage((summary(lmdata_N$death_type[idx]) / sum(summary(lmdata_N$death_type[idx])))[c('natural', 'unnatural')])
+  
+  ### Cultural background
+  
+  summary_table_filtered['Cultural background'] <- ''
+  summary_table_all['Cultural background'] <- ''
+  summary_table_lm['Cultural background'] <- ''
+  
+  idx <- stats_N$anglo != 'unknown'
+  summary_table_filtered['Cultural background N/A'] <- to_percentage(mean(!idx))
+  summary_table_filtered[c('Anglophone', 'Non-anglophone')] <- to_percentage((summary(stats_N$anglo[idx]) / sum(summary(stats_N$anglo[idx])))[c('anglo', 'non_anglo')])
+  
+  idx <- stats_all$anglo != 'unknown'
+  summary_table_all['Cultural background N/A'] <- to_percentage(mean(!idx))
+  summary_table_all[c('Anglophone', 'Non-anglophone')] <- to_percentage((summary(stats_all$anglo[idx]) / sum(summary(stats_all$anglo[idx])))[c('anglo', 'non_anglo')])
+  
+  idx <- lmdata_N$anglo != 'unknown'
+  summary_table_lm['Cultural background N/A'] <- to_percentage(mean(!idx))
+  summary_table_lm[c('Anglophone', 'Non-anglophone')] <- to_percentage((summary(lmdata_N$anglo[idx]) / sum(summary(lmdata_N$anglo[idx])))[c('anglo', 'non_anglo')])
+  
+  ### Notable type
+  
+  summary_table_filtered['Notability type'] <- ''
+  summary_table_all['Notability type'] <- ''
+  summary_table_lm['Notability type'] <- ''
+  
+  idx <- !is.na(stats_N$type_group)
+  summ <- summary(stats_N$type_group[idx])[type_groups]
+  summary_table_filtered['Notability type N/A'] <- to_percentage(mean(!idx))
+  summary_table_filtered[names(summ)] <- to_percentage(summ / sum(summ))
+  
+  idx <- !is.na(stats_all$type_group)
+  summ <- summary(stats_all$type_group[idx])[type_groups]
+  summary_table_all['Notability type N/A'] <- to_percentage(mean(!idx))
+  summary_table_all[names(summ)] <- to_percentage(summ / sum(summ))
+  
+  idx <- !is.na(lmdata_N$type_group)
+  summ <- summary(lmdata_N$type_group[idx])[type_groups]
+  summary_table_lm['Notability type N/A'] <- to_percentage(mean(!idx))
+  summary_table_lm[names(summ)] <- to_percentage(summ / sum(summ))
+  
+  summary_table_filtered['Count'] <- nrow(stats_N)
+  summary_table_all['Count'] <- nrow(stats_all)
+  summary_table_lm['Count'] <- nrow(lmdata_N)
+  
+  # Return a table with stats for both "all" and "filtered" (i.e., those included in the study).
+  data.frame(All=summary_table_all, Included=summary_table_filtered, Regression=summary_table_lm)
+}
+
+plot_num_art <- function(num_art, medium) {
+  par(mar=c(6,5,2,2))
+  idx <- which(names(num_art)==TWITTER_START_DATE):which(names(num_art)==MAX_DATE)
+  plot(num_art[idx], axes=FALSE, log='y', type='p', xlab='', ylab='Number of documents',
+       col=COL[[medium]], main=medium, ylim=c(5e4,1e8))
+  axis(2)
+  days <- DAYS[idx]
+  ticks <- which(grepl('-01$', days))
+  axis(1, at=ticks, labels=rep('', length(ticks)), col.ticks='gray')
+  ticks <- which(grepl('-01-01$', days))
+  axis(1, at=ticks, labels=days[ticks], las=2)
+  # par(.default_par)
+}
+
+plot_time_series_for_small_multiples <- function(name, medium, X, x, num_art,
+                                                 xlab=TRUE, ylab=TRUE) {
+  if (SAVE_PLOTS) pdf(sprintf('%s/mention_curve_%s_%s.pdf', PLOTDIR, name, medium), width=2, height=2,
+                      pointsize=8, family='Helvetica', useDingbats=FALSE)
+  par(mar=c(3,3,1,1))
+  mid <- wiki_to_mid[sprintf('<http://en.wikipedia.org/wiki/%s>', name)]
+  ymin <- log10(1 / max(num_art, na.rm=TRUE))
+  raw <- log10(x[mid, colnames(x) %in% -100:360])
+  smoothed <- X[mid, colnames(X) %in% -100:360]
+  plot(-100:360, raw, col=COL_LIGHT[[medium]],
+       bty='n', xlab='', xlim=c(-100,360), ylim=c(ymin,-1), ylab='',
+       panel.first=abline(v=0, col='gray'))
+  text(360, -1, sprintf('%s', gsub('_', ' ', name)), adj=c(1,1), cex=1)
+  lines(names(smoothed), smoothed, col=COL[[medium]], lwd=2)
+  if (xlab) mtext('Days since death', side=1, line=2)
+  if (ylab) mtext('Fraction mentioning docs [log10]', side=2, line=2)
+  if (SAVE_PLOTS) dev.off()
+}
+
+plot_max_mem_hist <- function(medium) {
+  if (SAVE_PLOTS) cairo_pdf(sprintf('%s/max_mem_hist_%s.pdf', PLOTDIR, medium), width=3.4, height=2.4,
+                            pointsize=8, family='Helvetica')
+  par(mar=c(3,3,1,3))
+  if (medium == 'NEWS') {
+    x <- x_N
+  } else if (medium == 'TWITTER') {
+    x <- x_T
+  } else {
+    stop("medium must be NEWS or TWITTER!")
+  }
+  t_max <- 100
+  max_days <- apply(x[,colnames(x) %in% 0:t_max], 1, function(x) which.max(x) - 1)
+  h <- hist(max_days, breaks=0:(t_max+1), right=FALSE, include.lowest=FALSE, xlab='', ylab='',
+            main=NULL, axes=FALSE, col=COL[[medium]], border=NA, xlim=c(0,t_max+1), ylim=c(0,800))
+  cum <- cumsum(h$counts)/sum(h$counts)
+  ticks <- seq(0, t_max, 10)
+  axis(1, at=ticks+0.5, labels=ticks, las=2)
+  mtext('Days since death', side=1, line=2)
+  axis(2, col=COL[[medium]], col.axis=COL[[medium]])
+  mtext('Number of people', side=2, line=2, col=COL[[medium]])
+  par(new=TRUE)
+  plot((0:t_max)+0.5, cum, type='p', xlab='', ylab='', xlim=c(0,t_max+1), ylim=c(0,1), axes=FALSE,
+       panel.first=abline(h=cum[30], v=29.5, col='gray', lty=2))
+  axis(4)
+  mtext('Cumulative rel. frequency', side=4, line=2)
+  text(29.5, cum[30], labels=sprintf('%.1f%% had maximum mention\n frequency by day 29', 100*cum[30]),
+       adj=c(-0.1,1.5), col='gray')
+  if (SAVE_PLOTS) dev.off()
+  return(list(hist=h, max_days=max_days))
+}
+
+biexp_fit <- function(medium) {
+  if (medium == 'NEWS') {
+    x <- x_N
+  } else if (medium == 'TWITTER') {
+    x <- x_T
+  } else {
+    stop("medium must be NEWS or TWITTER!")
+  }
+  
+  days <- 1:400
+  # Map the first post-mortem day to t = 0.
+  t <- days-1
+  eps <- min(x[x>0], na.rm=TRUE)
+  y <- 10^colMeans(log10(x[,colnames(x) %in% days] + eps), na.rm=TRUE)
+  df <- data.frame(y=y, t=t)
+  
+  # First approximation: r = 0.
+  # log(y) ~ log(N*exp(-p*t)) = log(N)-p*t
+  model0 <- lm(log(y) ~ t, data=df)
+  N0 <- exp(coef(model0)[1])
+  p0 <- -coef(model0)[2]
+  
+  # Second approximation: q = 0.
+  model1 <- nls(log(y) ~ log( N/(p+r) * (p*exp(-(p+r)*t) + r) ),
+                start=list(p=p0, N=N0, r=0),
+                data=df, control=list(maxiter=1e8), algorithm='port')
+  N1 <- coef(model1)['N']
+  p1 <- coef(model1)['p']
+  r1 <- coef(model1)['r']
+  
+  # Full model.
+  model <- nls(log(y) ~ log( N/(p-q+r) * ((p-q)*exp(-(p+r)*t) + r*exp(-q*t)) ),
+               start=list(p=p1, N=N1, r=r1, q=0),
+               data=df, control=list(maxiter=1e8), algorithm='port', lower=c(q=0))
+  
+  return(coef(model))
+}
+
+plot_avg_fraction_of_mentioning_docs <- function(medium, biexp_coefs=NULL) {
+  if (SAVE_PLOTS) pdf(sprintf('%s/avg_mention_curve_%s.pdf', PLOTDIR, medium), width=3.4, height=3.4,
+                      pointsize=8, family='Helvetica', useDingbats=FALSE)
+  par(mar=c(3,3,1,1))
+  if (medium == 'NEWS') {
+    x <- x_N
+  } else if (medium == 'TWITTER') {
+    x <- x_T
+  } else {
+    stop("medium must be NEWS or TWITTER!")
+  }
+  max_day <- 400
+  days <- -100:max_day
+  eps <- min(x[x>0], na.rm=TRUE)
+
+  # Log.
+  y <- colMeans(log10(x[,colnames(x) %in% days] + eps), na.rm=TRUE)
+  par(fig=c(0, 1, 0, 1))
+  plot(days, y, type='p', bty='n', lwd=2, xlab='', ylab='', #xaxt='n', yaxt='n',
+       panel.first=abline(v=0, col='gray', lwd=1, lty=2), col=COL[[medium]], las=0)
+  mtext('Days since death', side=1, line=2)
+  mtext('Fraction mentioning documents [log10]', side=2, line=2)
+  y365 <- y['365']
+  arrows(x0=325, x1=355, y0=y365, y1=y365, length=0.05)
+  text(325, y365, '365 days', adj=c(1.1, 0.5))
+
+  if (!is.null(biexp_coefs)) {
+    N <- biexp_coefs['N']
+    p <- biexp_coefs['p']
+    r <- biexp_coefs['r']
+    q <- biexp_coefs['q']
+
+    t <- 0:(max(days)-1)
+    mem_comm <- N * exp(-(p+r)*t)
+    mem_cult <- N/(p-q+r)*r * (exp(-q*t) - exp(-(p+r)*t))
+    mem <- mem_comm + mem_cult
+    
+    tt <- t+1
+    lines(tt, log10(mem_comm), lty=1, lwd=2, col=COL_GREEN)
+    lines(tt, log10(mem_cult), lty=1, lwd=2, col=COL_RED)
+    lines(tt, log10(mem), lty=1, lwd=2, col='black')
+
+    legend('topright', bty='n',
+           legend=c('Daily average', 'Biexponential fit S(t) = u(t) + v(t)',
+                    'Communicative memory u(t)', 'Cultural memory v(t)'),
+           seg.len=3,
+           pch=c(1,NA,NA,NA),
+           lty=c(0,1,1,1), #lty=c(0,1,4,2),
+           col=c(COL[[medium]], 'black', COL_GREEN, COL_RED),
+           lwd=c(2, 2, 2, 2))
+    
+    # Log-log.  
+    par(fig=c(0.35, 0.9, 0.27, 0.77), new=TRUE)
+    y <- y[names(y) %in% tt]
+    # Here the day of death is shown as day 1 (due to log axes).
+    plot(tt, y, type='p', bty='n', xlab='', ylab='', lwd=2, col=COL[[medium]], las=0, log='x')
+    lines(tt, log10(mem_comm), lty=1, lwd=2, col=COL_GREEN)
+    lines(tt, log10(mem_cult), lty=1, lwd=2, col=COL_RED)
+    lines(tt, log10(mem), lty=1, lwd=2, col='black')
+    legend('topright', bty='n', legend='Log x-scale', inset=c(0.1,0.2))
+  }
+
+  if (SAVE_PLOTS) dev.off()
+}
+
+plot_comm_vs_cult_mem <- function(medium, biexp_coefs=NULL) {
+  if (SAVE_PLOTS) pdf(sprintf('%s/comm_vs_cult_mem_%s.pdf', PLOTDIR, medium), width=3.4, height=2.4,
+                      pointsize=8, family='Helvetica', useDingbats=FALSE)
+  par(mar=c(4,4,1,1))
+  if (medium == 'NEWS') {
+    x <- x_N
+  } else if (medium == 'TWITTER') {
+    x <- x_T
+  } else {
+    stop("medium must be NEWS or TWITTER!")
+  }
+  max_day <- 40
+  t <- seq(0, max_day-1, 0.01)
+  N <- biexp_coefs['N']
+  p <- biexp_coefs['p']
+  r <- biexp_coefs['r']
+  q <- biexp_coefs['q']
+  u <- function(t, N, p, r, q) N * exp(-(p+r)*t)
+  v <- function(t, N, p, r, q) N/(p-q+r)*r * (exp(-q*t) - exp(-(p+r)*t))
+  mem_comm <- u(t, N, p, r, q)
+  mem_cult <- v(t, N, p, r, q)
+  ratio <- mem_cult / (mem_comm + mem_cult)
+  plot(t+1, ratio, type='l', bty='n', col=COL[[medium]], lwd=2,
+       xlab='Days since death', ylab='Fraction of cultural memory')
+  for (perc in c(0.5, 0.99)) {
+    idx <- min(which(ratio>=perc))
+    points(t[idx]+1, ratio[idx], lwd=3, pch=20, col='black', cex=2)
+    segments(-5, ratio[idx], t[idx]+1, ratio[idx], col='black', lty=2)
+    segments(t[idx]+1, -5, t[idx]+1, ratio[idx], col='black', lty=2)
+    text(t[idx]+1, ratio[idx], adj=c(-0.2, 1.2),
+         labels=sprintf('%.0f%% after\n%.0f days', 100*perc, ceiling(t[idx]+1)))
+  }
+  if (SAVE_PLOTS) dev.off()
+}
+
+overlay_time_series <- function(X, medium) {
+    matplot(-N:N, t(X), type='l', lty=1, lwd=2, col=COL_XLIGHT[[medium]], xlab='Days since death',
+            ylab='Fraction mentioning docs [log10]', ylim=range(X), main=medium, bty='n')
+}
+
+smoothed_density <- function(x, bw=0.05, range=c(0,1)) {
+  # Reflect the data to avoid drops at boundaries.
+  left <- -(x-range[1]) + range[1]
+  right <- left + 2*(range[2]-range[1])
+  x <- c(left, x, right)
+  est <- bkde(x, bandwidth=bw, range=range(x), gridsize=1000)
+  # Consider only the original range.
+  idx <- which(est$x >= range[1] & est$x <= range[2])
+  est$x <- est$x[idx]
+  # Renormalize.
+  est$y <- 3*est$y[idx]
+  est
+}
+
+# Smoothed histograms of curve properties for the different people groups.
+plot_smoothed_densities_raw <- function(stats, medium, prop, groups, main=NULL) {
+  nbw <- 20
+  chars <- c('mean_before', 'peak_mean_boost', 'perm_boost', 'time_till_half')
+  par(mfrow=c(length(groups), length(chars)), mar=c(4,4,2,2))
+  for (char in chars) {
+    # Find the extreme y-value to be plotted.
+    ymin <- Inf
+    ymax <- -Inf
+    for (group in groups) {
+      mask <- is.finite(stats[,prop]) & stats[,prop] %in% group
+      x <- stats[mask,char]
+      sm <- smoothed_density(x, bw=(max(x)-min(x))/nbw, range=range(x))$y
+      ymin <- min(ymin, min(sm))
+      ymax <- max(ymax, max(sm))
+    }
+    for (group in groups) {
+      mask <- is.finite(stats[,prop]) & stats[,prop] %in% group
+      x <- stats[mask,char]
+      est <- smoothed_density(x, bw=(max(x)-min(x))/nbw, range=range(x))
+      # The estimate without reflected data, that is it drops at the boundaries.
+      est_ <- bkde(x, bandwidth=(max(x)-min(x))/nbw, range=range(x))
+      plot(est$x, est$y, ylim=c(ymin,ymax), type='l', lwd=2,
+           main=if (is.null(main)) group else main,
+           col=COL[[medium]], xlab=FANCY_CURVE_CHAR_NAMES[char], ylab='Density', bty='n')
+      rug(x)
+    }
+  }
+  par(.default_par)
+}
+
+plot_chars_by_group <- function(stats, medium, prop, groups) {
+  chars <- c('mean_before', 'peak_mean_boost', 'perm_boost', 'time_till_half')
+  par(mfrow=c(1, length(chars)), mar=c(10,4,2,2))
+  for (char in chars) {
+    char_rank <- sprintf('%s_rank', char)
+    grouped <- split(stats[,char_rank]/nrow(stats), prop)[as.character(groups)]
+    boxplot(grouped, las=3, notch=TRUE, main=FANCY_CURVE_CHAR_NAMES[char],
+            col=COL_LIGHT[[medium]], bty='n', ylab='Relative rank')
+  }
+  par(.default_par)
+}
+
+smoothed_2d_density <- function(x, bw) {
+  # Reflect the data to avoid drops at boundaries.
+  x <- rbind(cbind( -x[,1],  -x[,2]),
+             cbind( -x[,1],   x[,2]),
+             cbind( -x[,1], 2-x[,2]),
+             cbind(  x[,1],  -x[,2]),
+             cbind(  x[,1],   x[,2]),
+             cbind(  x[,1], 2-x[,2]),
+             cbind(2-x[,1],  -x[,2]),
+             cbind(2-x[,1],   x[,2]),
+             cbind(2-x[,1], 2-x[,2]))
+  est <- bkde2D(x, range.x=list(c(-1,2), c(-1,2)), bandwidth=c(bw,bw), gridsize=c(153,153))
+  # Consider only the original range [0,1].
+  idx <- which(est$x1 >= 0 & est$x1 <= 1)
+  est$x1 <- est$x1[idx]
+  est$x2 <- est$x2[idx]
+  # Renormalize.
+  est$fhat <- 9*est$fhat[idx,idx]
+  est
+}
+
+plot_smoothed_2d_densities <- function(stats, medium, char1, char2, prop, groups, main=NULL) {
+  bw <- 0.1
+  char1_rank <- sprintf('%s_rank', char1)
+  char2_rank <- sprintf('%s_rank', char2)
+  # Find the maximum y-value to be plotted.
+  ymax <- -Inf
+  for (group in groups) {
+    mask <- is.finite(stats[,prop]) & stats[,prop] %in% group
+    x <- cbind(stats[mask, char1_rank], stats[mask, char2_rank])/length(mask)
+    ymax <- max(ymax, max(smoothed_2d_density(x, bw=bw)$fhat))
+  }
+  for (group in groups) {
+    mask <- is.finite(stats[,prop]) & stats[,prop] %in% group
+    x <- cbind(stats[mask, char1_rank], stats[mask, char2_rank])/length(mask)
+    est <- smoothed_2d_density(x, bw=bw)
+    filled.contour(est$x1, est$x2, est$fhat, zlim=c(0,ymax),
+                   color=function(n) gray.colors(n,0,1),
+                   plot.title=title(main=sprintf('%s\n(%s)', if (is.null(main)) group else main, medium),
+                                    xlab=char1, ylab=char2))
+    par(.default_par)
+  }
+}
+
+cluster <- function(stats, feats) {
+  input <- cbind(stats[,feats])
+  colnames(input) <- feats
+  # z-score normalize.
+  input <- t(t(input) - colMeans(input))
+  input <- t(t(input) / apply(input, 2, sd))
+  K <- 2:30
+  kmeans_all <- mclapply(K, function(k) { set.seed(1); kmeans(input, k, nstart=20) })
+  # Reorder the clusters.
+  for (k in K) {
+    km <- kmeans_all[[which(K==k)]]
+    ord <- order(km$size, decreasing=TRUE)
+    ord_map <- 1:k; names(ord_map) <- ord
+    km$size <- km$size[ord]
+    km$withinss <- km$withinss[ord]
+    km$centers <- km$centers[ord,]
+    rownames(km$centers) <- 1:k
+    km$cluster <- ord_map[as.character(km$cluster)]
+    kmeans_all[[which(K==k)]] <- km
+  }
+  list(clustering=kmeans_all, diss=dist(input), K=K)
+}
+
+plot_sil_width <- function(medium, kmeans_all, diss) {
+  avg_sil_width_kmeans <- unlist(lapply(kmeans_all, function(km) summary(silhouette(km$cluster, diss^2))$avg.width))
+  plot(2:(length(kmeans_all)+1), avg_sil_width_kmeans, type='b', xlab='Number of clusters',
+       ylab='Avg. silhouette width', main=medium, col=COL[[medium]], lwd=2, bty='n')
+}
+
+plot_clustered_time_series <- function(medium, kmeans, X) {
+  k <- nrow(kmeans$centers)
+  par(mfrow=c(1, k))
+  for (j in 1:k) {
+    matplot(-N:N, t(X[kmeans$cluster==j,]), type='l', lty=1, lwd=2, col=COL_XLIGHT[[medium]],
+            xlab='Days since death', ylab='% mentioning docs [log10]', ylim=range(X),
+            main=sprintf('%s cluster %s', medium, j))
+  }
+  par(.default_par)
+}
+
+boot_ci <- function(x, func) {
+  bo <- boot(x, statistic=function(d, i) func(d[i]), R=5000)
+  ci <- boot.ci(bo, conf=0.95, type="basic")$basic[4:5]
+  if (is.null(ci)) {
+    upper <- lower <- NA
+  } else {
+    lower <- ci[1]
+    upper <- ci[2]
+  } 
+  unlist(list(upper=upper, point_est=func(x), lower=lower))
+}
+
+make_regression_data <- function(medium) {
+  if (medium != 'NEWS' && medium != 'TWITTER') stop('Medium must be \'NEWS\' or \'TWITTER\'')
+  stats <- if (medium=='NEWS') stats_N else stats_T
+  data <- stats[stats$gender != ''
+                & stats$death_type != 'unknown'
+                & !is.na(stats$type_group) # This removes only 4 people.
+                & !is.na(stats$age_group)
+                & stats$age %in% 20:99,]
+  data$age_group <- factor(data$age_group)
+  # Mean (median) age is 71 (74), so use the age bracket 70-79 as the reference level.
+  base_age_group  <- '70'
+  base_death_type <- 'unknown'
+  base_death_type <- 'natural'
+  base_type_group <- 'art' # 'general fame'
+  base_gender     <- 'Male'
+  base_anglo      <- 'anglo'
+  data$age_group  <- relevel(data$age_group, base_age_group)
+  data$death_type <- relevel(data$death_type, base_death_type)
+  data$type_group <- relevel(data$type_group, base_type_group)
+  data$gender     <- relevel(data$gender, base_gender)
+  data$anglo      <- relevel(data$anglo, base_anglo)
+  N <- dim(data)[1]
+  relranks <- (0:(N-1))/(N-1) - 0.5
+  data$mean_before_relrank[order(data$mean_before_rank)] <- relranks
+  data$peak_mean_boost_relrank[order(data$peak_mean_boost_rank)] <- relranks
+  data$perm_boost_relrank[order(data$perm_boost_rank)] <- relranks
+  return(data)
+}
+
+# The real uncertainty in the summed coefficients is larger; need to add separate SEs and entries of vcov
+# matrix: https://biologyforfun.wordpress.com/2017/05/17/adding-standard-errors-for-interaction-terms/comment-page-1/
+compound_se_for_lm <- function(mod, interact=NULL, base_age=NULL) {
+  X <- as.data.frame(vcov(mod))
+  idx <- rownames(X)[grep('age_group..$', rownames(X))]
+  X[sprintf('age_group%s:%s', base_age, interact),] <- 0
+  X[,sprintf('age_group%s:%s', base_age, interact)] <- 0
+  sapply(idx, function(i) {
+    sub_idx <- c(i, if (is.null(interact)) NULL else c(interact, sprintf('%s:%s', i, interact)))
+    sqrt(sum(X[sub_idx, sub_idx]))
+    })
+}
+
+run_regression_analysis_for_death_types <- function(medium, lmdata) {
+  if (medium != 'NEWS' && medium != 'TWITTER') stop('Medium must be \'NEWS\' or \'TWITTER\'')
+  lmdata <- if (medium == 'NEWS') lmdata_N else lmdata_T
+  base_age <- levels(lmdata$age_group)[1]
+  base_death_type <- levels(lmdata$death_type)[1]
+  
+  # Compare natural vs. unnatural death for the different age brackets (0 to omit the
+  # intercept and include it instead as the coefficient of the base age).
+  predictors <- '0 + mean_before_relrank + age_group + death_type + gender + anglo + type_group + age_group:death_type'
+  interact <- sprintf('death_type%s', if (base_death_type=='natural') 'unnatural' else 'natural')
+  mod_peak <- lm(as.formula(sprintf('peak_mean_boost_relrank ~ %s', predictors)), lmdata)
+  mod_perm <- lm(as.formula(sprintf(     'perm_boost_relrank ~ %s', predictors)), lmdata)
+  # These plots show the mean relative rank (w.r.t. output measure) as a function of age,
+  # for a male anglo artist of median pre-mortem popularity.
+  ylim <- c(-0.3,0.6)
+  plot_age_coeffs_for_death_types(mod_peak, medium, 'peak_mean_boost', base_age, ylim)
+  plot_age_coeffs_for_death_types(mod_perm, medium, 'perm_boost', base_age, ylim)
+
+  return(list(mod_peak=mod_peak, mod_perm=mod_perm))
+}
+
+plot_age_coeffs_for_death_types <- function(mod, medium, outcome, base_age, ylim=NULL, col=COL[[medium]]) {
+  summary <- coef(summary(mod))
+
+  # Non-interaction terms (i.e., natural death).
+  idx <- grep('^age_group..$', rownames(summary))
+  decades <- as.numeric(sub('.*(\\d\\d).*', '\\1', rownames(summary))[idx])
+  ord <- order(decades)
+  decades <- decades[ord]
+  age_coef_natural <- summary[idx,1][ord]
+  se_natural <- compound_se_for_lm(mod)[ord]
+
+  # Interaction terms (i.e., unnatural death).
+  idx <- grep('^age_group..:death_typeunnatural$', rownames(summary))
+  summary[idx,1] <- summary[idx,1] + summary['death_typeunnatural',1]
+  rownames(summary)[rownames(summary)=='death_typeunnatural'] <- sprintf('age_group%s:death_typeunnatural', base_age)
+  # Add age_group baseline coefs to interaction coefs.
+  idx <- grep('^age_group..:death_typeunnatural$', rownames(summary))
+  summary[idx,1] <- summary[idx,1] + summary[grep('age_group..$', rownames(summary)), 1]
+  age_coef_unnatural <- summary[idx,1][ord]
+  se_unnatural <- compound_se_for_lm(mod, 'death_typeunnatural', base_age)[ord]
+
+  if (is.null(ylim)) ylim <- range(c(age_coef_natural - 2*se_natural,
+                                     age_coef_natural + 2*se_natural,
+                                     age_coef_unnatural - 2*se_unnatural,
+                                     age_coef_unnatural + 2*se_unnatural), na.rm=TRUE)
+  col_unnat <- 'gray'
+  if (outcome == 'peak_mean_boost') {
+    main <- sprintf('Short-term boost', medium)
+    outfile <- sprintf('%s/age_coefs_%s_%s.pdf', PLOTDIR, medium, outcome)
+  } else if (outcome == 'perm_boost') {
+    main <- sprintf('Long-term boost', medium)
+    outfile <- sprintf('%s/age_coefs_%s_%s.pdf', PLOTDIR, medium, outcome)
+  } else if (outcome == 'peak_mean_boost_diff') {
+    main <- 'Short-term boost'
+    outfile <- sprintf('%s/age_coefs_NEWS-VS_TWITTER_%s.pdf', PLOTDIR, outcome)
+  } else if (outcome == 'perm_boost_diff') {
+    main <- 'Long-term boost'
+    outfile <- sprintf('%s/age_coefs_NEWS-VS_TWITTER_%s.pdf', PLOTDIR, outcome)
+  } else {
+    stop('Illegal outcome name')
+  }
+  
+  if (SAVE_PLOTS) cairo_pdf(outfile, width=3.4, height=2, pointsize=8, family='Helvetica')
+  par(mar=c(3,3,1,1))
+  plot(decades+6, age_coef_unnatural, type='b', panel.first=abline(h=0, col='gray'),
+       ylim=ylim, xlim=c(min(decades), max(decades)+10), bty='n', xaxt='n', yaxt='n',
+       main=main, xlab='', ylab='', lwd=2, col=col_unnat)
+  dispersion(decades+6, age_coef_unnatural, 2*se_unnatural, col=col_unnat, arrow.cap=0.005)
+  axis(1, at=c(decades, max(decades)+10), line=0)
+  axis(2, line=0)
+  mtext('Age at death', 1, line=2)
+  mtext('Effect size', 2, line=2)
+  points(decades+4, age_coef_natural, type='b', lwd=2, col=col)
+  dispersion(decades+4, age_coef_natural, 2*se_natural, col=col, arrow.cap=0.005)
+  legend('bottomleft', c('Natural death', 'Unnatural death'), col=c(col, col_unnat), lty=1, lwd=2, horiz=TRUE, bty='n')
+  if (SAVE_PLOTS) dev.off()
+}
+
+draw_mega_figure <- function() {
+  days <- -100:360
+  feat_cols <- c(mean_before=COL_DARKBLUE, peak_mean_boost=COL_MAGENTA, perm_boost=COL_GREEN, time_till_half=COL_RED)
+  bg <- function(col) rect(par("usr")[1], par("usr")[3], par("usr")[2], par("usr")[4], col=col, border=NA)
+  mar <- 0.2
+  
+  if (SAVE_PLOTS) cairo_pdf(sprintf('%s/megafigure.pdf', PLOTDIR), width=8, height=8, pointsize=6, family='Helvetica')
+  
+  par(.default_par)
+  plot.new()
+  rel_line_height <- par('mai')[1]/par('mar')[1]/par('din')
+  par(fig=c(0.59, 0.91, 0.09, 0.41), new=TRUE)
+  par(mar=c(0,0,0,0))
+  confusion <- table(as.factor(km_N$cluster), as.factor(km_T$cluster))
+  palmat <- color.scale(confusion^0.5, cs1=c(1,1), cs2=c(1,0.2), cs3=c(1,0.2))
+  # Must fix the function definition of color2D.matplot: do fix(color2D.matplot) and replace "f" with "d" on line 101:
+  # https://stackoverflow.com/questions/44522895/plot-color-matrix-with-numbers-in-r
+  color2D.matplot(confusion, cellcolors=palmat, main='', show.values=1, vcol=rgb(0,0,0), axes=FALSE, vcex=1.2)
+  feats <- c('mean_before', 'peak_mean_boost', 'perm_boost', 'time_till_half')
+  # bar_range <- 1.1 * range(c(km_N$centers, km_N$centers))
+  bar_range <- c(-2.1, 5.2)
+  for (medium in c('NEWS', 'TWITTER')) {
+    if (medium == 'NEWS') {
+      kmeans <- km_N
+      X <- X_N
+      x <- x_N
+      fig <- function(j) c(0.51, 0.59, (4-j)*0.08+0.09, (5-j)*0.08+0.09)
+      fig_incr <- c(mar*rel_line_height[1], mar*rel_line_height[1], 0, 0)
+      fig_bar <- function(j) c(0.91, 0.99, (4-j)*0.08+0.09, (5-j)*0.08+0.09)
+    } else {
+      kmeans <- km_T
+      X <- X_T
+      x <- x_T
+      fig <- function(j) c(j*0.08+0.51, (j+1)*0.08+0.51, 0.41, 0.49)
+      fig_incr <- c(0, 0, -mar*rel_line_height[2], -mar*rel_line_height[2])
+      fig_bar <- function(j) c(j*0.08+0.51, (j+1)*0.08+0.51, 0.01, 0.09)
+    }
+    cluster_sizes <- kmeans$size
+    y <- do.call(cbind, lapply(1:4, function(j) colMeans(X[kmeans$cluster==j, colnames(X) %in% days], na.rm=TRUE)))
+    for (j in 1:4) {
+      # bar_range <- 1.1 * range(kmeans$centers)
+      par(fig=fig(j)-fig_incr, new=TRUE, mar=c(mar, mar, mar, mar))
+      plot(days, y[,j], type='l', ylim=range(y), las=2, col=COL[[medium]], lwd=2, xlab='', ylab='', xaxt='n', yaxt='n',
+           bty='n', panel.first=bg("#eeeeee"))
+      text(max(days), max(y), sprintf('C%d', j), adj=c(1,1), cex=1)
+      par(fig=fig_bar(j)+fig_incr, new=TRUE, mar=c(mar, mar, mar, mar))
+      barplot(kmeans$centers[j,], main='', ylab='', col=feat_cols, names.arg='', ylim=bar_range, yaxt='n', border=NA,
+              bty='n', panel.first=bg("#eeeeee"))
+      if (medium=='TWITTER' && j==4) {
+        mtext('z-scores', side=4, line=1.8, cex=0.5)
+        axis(4, at=seq(-2,5), labels=c('-2','','0','','2','','4',''), cex.axis=0.5, cex.lab=0.5,
+                                          lwd=0.8, lwd.ticks=0.8, las=1, hadj=0)
+      }
+      text(par("usr")[2]*0.95, par("usr")[4]*0.95, adj=c(1,1), cex=0.5,
+           sprintf('N=%d\n(%.0f%%)', kmeans$size[j], 100*kmeans$size[j]/sum(kmeans$size)))
+    }
+  }
+  ### Matrix row label.
+  par(fig=c(0.50, 1, 0.50, 0.55), new=TRUE, mar=c(0,0,0,0))
+  plot(NULL, xaxt='n', yaxt='n', bty='n', ylab='', xlab='', xlim=0:1, ylim=0:1)
+  text(0.5, 0, 'Twitter', adj=c(0.5,0), col=COL[['TWITTER']], cex=1.2)
+  ### Matrix column label.
+  par(fig=c(0.40, 0.59, 0.42, 0.50), new=TRUE, mar=c(0,0,0,0))
+  plot(NULL, xaxt='n', yaxt='n', bty='n', ylab='', xlab='', xlim=0:1, ylim=0:1)
+  text(1, 0, 'News', adj=c(1,0), col=COL[['NEWS']], cex=1.2)
+  
+  ### Barplot legend.
+  par(fig=c(0.45, 0.59, 0.01, 0.09), new=TRUE)
+  plot(NULL, xaxt='n', yaxt='n', bty='n', ylab='', xlab='', xlim=0:1, ylim=0:1)
+  legend("bottomleft", legend=c(' pre-mortem mean', ' short-term boost', ' long-term boost', ' halving time'),
+         pch=15, pt.cex=3, cex=0.7, y.intersp=1.7,  bty='n', col=feat_cols, text.col=feat_cols)
+  
+  for (i in 3:1) {
+    delta <- 0.007
+    par(fig=c(i*delta, 0.4+i*delta, i*delta, 0.4+i*delta), new=TRUE, mar=c(5,5,0,0))
+    plot(NULL, xaxt='n', yaxt='n', xlab='', ylab='', panel.first=bg('white'), xlim=0:1, ylim=0:1)
+  }
+  par(fig=c(0, 0.50, 0.43, 0.59), new=TRUE, mar=c(0,0,0,0))
+  plot(NULL, xaxt='n', yaxt='n', bty='n', ylab='', xlab='', xlim=0:1, ylim=0:1)
+  text(0.5, 0, sprintf('Mention time series (N=%d)', dim(X)[1]), adj=c(0.5,0), cex=0.8)
+  
+  par(fig=c(0, 0.40, 0, 0.40), new=TRUE, mar=c(5,5,0,0))
+  name <- 'Whitney_Houston'
+  # name <- 'Donna_Summer'
+  # name <- 'Amy_Winehouse'
+  medium <- 'NEWS'
+  if (medium == 'NEWS') {
+    X <- X_N
+    x <- x_N
+    num_art <- num_art_N
+  } else {
+    X <- X_T
+    x <- x_T
+    num_art <- num_art_T
+  }
+  cex <- 0.65 # 0.85
+  mid <- wiki_to_mid[sprintf('<http://en.wikipedia.org/wiki/%s>', name)]
+  raw <- log10(x[mid, colnames(x) %in% days])
+  smoothed <- X[mid, colnames(X) %in% days]
+  ymin <- min(raw[is.finite(raw)], na.rm=TRUE)
+  col <- as.vector(col2rgb(COL[[medium]])/255)
+  col <- rgb(col[1], col[2], col[3], 0.2)
+  plot(days, raw, col=col, main='', pch=20, cex=2, cex.axis=0.7, cex.lab=0.7,
+       bty='o', xlab='Days since death', ylab='Fraction mentioning documents [log10]', ylim=c(ymin,-1),
+       panel.first=c(bg('white'), abline(v=0, col='gray', lty=2)))
+  lines(names(smoothed), smoothed, col=COL[[medium]], lwd=2)
+  text(max(days), -1, sprintf('%s', gsub('_', ' ', name)), adj=c(1,1), cex=1) # cex=1.5)
+  y_before <- stats_N[mid, 'mean_before']
+  y_peak <- y_before + stats_N[mid, 'peak_mean_boost']
+  y_perm <- y_before + stats_N[mid, 'perm_boost']
+  x_tth <- stats_N[mid, 'time_till_half'] * max(as.numeric(colnames(X)))
+  y_tth <- mean(c(y_peak, y_perm))
+  # mean before
+  segments(x0=min(days), y0=y_before, x1=-30, lwd=2, col=feat_cols['mean_before'])
+  text(-60, y_before, 'pre-mortem\nmean', srt=0, adj=c(0.5,1.5), col=feat_cols['mean_before'], cex=cex)
+  # peak
+  segments(x0=0, y0=y_peak, x1=30)
+  arrows(x0=-40, y0=y_before, y1=y_peak, length=0.05, code=3, lwd=2, col=feat_cols['peak_mean_boost'])
+  text(-70, mean(c(y_before, y_peak)), 'short-\nterm\nboost', srt=0, adj=c(0.5,0.5), col=feat_cols['peak_mean_boost'], cex=cex)
+  # perm
+  segments(x0=30, y0=y_perm, x1=max(days))
+  arrows(x0=100, y0=y_before, y1=y_perm, length=0.05, code=3, lwd=2, col=feat_cols['perm_boost'])
+  text(110, mean(c(y_before, y_perm)), 'long-term boost', srt=0, adj=c(0,0.5), col=feat_cols['perm_boost'], cex=cex)
+  # tth
+  arrows(x0=1, y0=y_tth, x1=x_tth, length=0.05, code=3, lwd=2, col=feat_cols['time_till_half'])
+  text(x_tth+10, y_tth, 'halving time', srt=0, adj=c(0,0.5), col=feat_cols['time_till_half'], cex=cex)
+  
+  ### Arrow from example to cluster.
+  par(fig=c(0.40, 0.51, 0, 0.45), new=TRUE, mar=c(0,0,0,0))
+  plot(NULL, xaxt='n', yaxt='n', bty='n', xlab='', ylab='', xlim=0:1, ylim=0:1)
+  col <- 'gray50'
+  arrows(x0=0, y0=0.5, x1=0.5, length=0.05, code=0, lwd=5, col=col, ljoin=1, lend=2)
+  arrows(x0=0.5, y0=0.5, y1=0.40, length=0.05, code=0, lwd=5, col=col, ljoin=1, lend=2)
+  arrows(x0=0.5, y0=0.40, x1=0.98, length=0.2, code=2, lwd=5, col=col, ljoin=1, lend=1)
+  text(0.50, 0.53, 'Clustering', srt=0, adj=c(0,0.5), col=col, cex=1.5, font=2, srt=90)
+  
+  if (SAVE_PLOTS) dev.off()
+}
+
+stats_all <- load_stats_all()
+
+stats_N <- load_stats('NEWS')
+stats_T <- load_stats('TWITTER')
+
+num_art_N <- get_num_art('NEWS')
+num_art_T <- get_num_art('TWITTER')
+
+data_N <- get_mention_freq_table('NEWS')
+data_T <- get_mention_freq_table('TWITTER')
+
+x_N <- get_rel_date_matrix('NEWS', data_N, num_art_N, CHUNK_SIZE)
+x_T <- get_rel_date_matrix('TWITTER', data_T, num_art_T, CHUNK_SIZE)
+
+mids_N <- filter_people('NEWS', x_N)
+mids_T <- filter_people('TWITTER', x_T)
+mids <- intersect(mids_N, mids_T)
+
+x_N <- x_N[mids,]
+x_T <- x_T[mids,]
+
+X_N <- normalize_and_smooth('NEWS', x_N, num_art_N, mean_center=FALSE)
+X_T <- normalize_and_smooth('TWITTER', x_T, num_art_T, mean_center=FALSE)
+
+lmdata_N <- make_regression_data('NEWS')
+lmdata_T <- make_regression_data('TWITTER')
+
+# stats_N and stats_T contain the same people, so we arbitrarily use stats_N here.
+natural <- which(stats_N$natural_death == 1)
+unnatural <- which(stats_N$unnatural_death == 1)
+# Are there any people with ambiguous causes of death? -- No!
+length(intersect(natural, unnatural))
+
+cluster_feats <- c('mean_before', 'peak_mean_boost', 'perm_boost', 'time_till_half')
+cluster_result_N <- cluster(stats_N, cluster_feats)
+cluster_result_T <- cluster(stats_T, cluster_feats)
+k <- 4
+km_N <- cluster_result_N$clustering[[which(cluster_result_N$K==k)]]
+km_T <- cluster_result_T$clustering[[which(cluster_result_T$K==k)]]
+```
+
+
+# Number of documents per day
+
+```{r plot num art, fig.width=10, fig.height=4, echo=if (!SUPP_INFO) -c(1,4) else FALSE}
+par(mfrow=c(1,2))
+plot_num_art(num_art_N, 'NEWS')
+plot_num_art(num_art_T, 'TWITTER')
+par(.default_par)
+```
+
+`r figcap(TRUE)`
+Number of documents per day in the Spinn3r corpus.
+
+# Taxonomy of causes of death
+
+## Natural causes of death
+
+`r sprintf(paste(sort(c(as.character(tax_causes$cause.of.death[tax_causes$level1=='natural']), strsplit(natural_manual, '\\|')[[1]])), collapse=', '))`
+
+## Unnatural causes of death
+
+`r sprintf(paste(sort(c(as.character(tax_causes$cause.of.death[tax_causes$level1=='unnatural']), strsplit(unnatural_manual, '\\|')[[1]])), collapse=', '))`
+
+`r #paste(sort(c('', as.character(tax_causes$cause.of.death[tax_causes$level1=='unnatural']), strsplit(unnatural_manual, '\\|')[[1]])), collapse='\n* ')`
+
+# Taxonomy of notability types
+
+```{r, echo=FALSE}
+tt <- tax_types[tax_types$profession != '[blank]',]
+type2str <- tapply(tt$profession, tt$level1, function(s) paste(sort(s), collapse=', '))
+```
+
+`r sprintf('* %s', paste(sprintf('__%s:__', names(type2str)), type2str, collapse='\n* '))`
+
+
+\ifshowall
+# Biographic statistics of public figures
+
+The first column represents the set of all `r nrow(stats_all)` Freebase people who died in the same time period studied (11 June 2009 to 30 September 2014).
+The second column represents the `r nrow(stats_N)` people studied.
+The third column represents the subset of the `r nrow(lmdata_N)` people included in the regression analysis.
+
+(A note on age: among all people in Freebase, there are some obvious age errors [e.g., 610 years]. Even when ignoring all ages above 120, the mean changes only slightly, dropping from 76.26 to 76.22.)
+
+```{r people description 1, echo=!SUPP_INFO}
+table <- make_bio_table()
+table
+```
+`r tabcap(!SUPP_INFO)`
+Biographic statistics of public figures.
+
+```{r, echo=FALSE}
+print(xtable(table, caption='', label='tab:people stats', align='lrrr'),
+      hline.after=c(-1,0,6,10,14,18,nrow(table)-1,nrow(table)),
+      file=sprintf('%s/people_stats_table.tex', TABLEDIR), floating=FALSE)
+```
+\fi
+
+
+\ifshowall
+# Examples of individual mention time series
+
+`r '__(a) News__'`
+
+```{r plot example time series N, fig.width=10, fig.height=2.5, echo=if (!SUPP_INFO) -1 else FALSE}
+par(mfrow=c(1,4))
+plot_time_series_for_small_multiples('Benoit_Mandelbrot', 'NEWS', X_N, x_N, num_art_N, ylab=TRUE)
+plot_time_series_for_small_multiples('Kashiram_Rana', 'NEWS', X_N, x_N, num_art_N, ylab=FALSE)
+plot_time_series_for_small_multiples('Amy_Winehouse', 'NEWS', X_N, x_N, num_art_N, ylab=FALSE)
+plot_time_series_for_small_multiples('George_McGovern', 'NEWS', X_N, x_N, num_art_N, ylab=FALSE)
+```
+
+`r '__(b) Twitter__'`
+
+```{r plot example time series T, fig.width=10, fig.height=2.5, echo=if (!SUPP_INFO) -c(1,6) else FALSE}
+par(mfrow=c(1,4))
+plot_time_series_for_small_multiples('Benoit_Mandelbrot', 'TWITTER', X_T, x_T, num_art_T, ylab=TRUE)
+plot_time_series_for_small_multiples('Kashiram_Rana', 'TWITTER', X_T, x_T, num_art_T, ylab=FALSE)
+plot_time_series_for_small_multiples('Amy_Winehouse', 'TWITTER', X_T, x_T, num_art_T, ylab=FALSE)
+plot_time_series_for_small_multiples('George_McGovern', 'TWITTER', X_T, x_T, num_art_T, ylab=FALSE)
+par(.default_par)
+```
+
+`r figcap(!SUPP_INFO)`
+Examples of mention time series for four deceased public figures.
+\fi
+
+
+\ifshowall
+# Overlay of all mention time series
+
+```{r scary wire plot, fig.width=8, fig.height=4, echo=if (!SUPP_INFO) -c(1,4) else FALSE}
+par(mfrow=c(1,2))
+overlay_time_series(X_N, 'NEWS')
+overlay_time_series(X_T, 'TWITTER')
+par(.default_par)
+```
+
+`r figcap(!SUPP_INFO)`
+Overlay of all mention time series.
+\fi
+
+
+\ifshowall
+# Frequency of post-mortem peak days
+
+## Histogram of post-mortem peak days
+
+```{r max mem hist, fig.width=10, fig.height=3, echo=if (!SUPP_INFO) -c(1,4) else FALSE}
+par(mfrow=c(1,2))
+mmh_N <- plot_max_mem_hist('NEWS')
+mmh_T <- plot_max_mem_hist('TWITTER')
+par(.default_par)
+```
+
+`r figcap(!SUPP_INFO)`
+Histogram of post-mortem peak days. _Left:_ news. _Right:_ Twitter. For each post-mortem day we count for how many individuals the mention frequency is largest on that day, out of the 100 days immediately following death. For most people, the maximum mention frequency is observed on the day after death.
+
+## Relative frequencies of peak days
+
+The first entry of each vector corresponds to day 0 (i.e., the day of death).
+
+```{r, echo=!SUPP_INFO}
+h_N <- mmh_N$hist
+h_T <- mmh_T$hist
+max_days_N <- mmh_N$max_days
+max_days_T <- mmh_T$max_days
+
+probs_N <- (h_N$counts/sum(h_N$counts))[1:30]
+probs_T <- (h_T$counts/sum(h_T$counts))[1:30]
+```
+
+__News:__
+
+```{r, echo=!SUPP_INFO}
+probs_N
+```
+
+__Twitter:__
+
+```{r, echo=!SUPP_INFO}
+probs_T
+```
+
+## Cumulative relative frequencies of peak days
+
+The first entry of each vector corresponds to day 0 (i.e., the day of death).
+
+__News:__
+
+```{r, echo=!SUPP_INFO}
+cumsum(probs_N)
+```
+
+__Twitter:__
+
+```{r, echo=!SUPP_INFO}
+cumsum(probs_T)
+```
+
+## People with late peak days (after day 29)
+
+Those whose peak day comes after day 29 tend to be those with low short-term boosts, as seen by computing the relative rank with respect to short-term boost of those with a late peak.
+
+__News:__
+
+```{r, echo=!SUPP_INFO}
+max_rank <- length(max_days_N)-1
+(summary(stats_N$peak_mean_boost_rank[max_days_N>29])-1) / max_rank
+# Compare this to the fraction of people with a late peak day.
+(sum(max_days_N>29)-1) / max_rank
+```
+
+__Twitter:__
+
+```{r, echo=!SUPP_INFO}
+(summary(stats_T$peak_mean_boost_rank[max_days_T>29])-1) / max_rank
+# Compare this to the fraction of people with a late peak day.
+(sum(max_days_T>29)-1) / max_rank
+```
+\fi
+
+
+\ifshowall
+# Average mention time series
+
+```{r, echo=!SUPP_INFO}
+coefs_N <- biexp_fit('NEWS')
+coefs_T <- biexp_fit('TWITTER')
+```
+
+`r '__(a) News__'`
+
+```{r, fig.width=6, fig.height=5, echo=!SUPP_INFO}
+plot_avg_fraction_of_mentioning_docs('NEWS', biexp_coefs=coefs_N)
+```
+
+`r '__(b) Twitter__'`
+
+```{r, fig.width=6, fig.height=5, echo=!SUPP_INFO}
+plot_avg_fraction_of_mentioning_docs('TWITTER', biexp_coefs=coefs_T)
+```
+
+`r figcap(!SUPP_INFO)`
+Average mention time series, obtained via the arithmetic mean of the individual raw mention time series of the people included in the study,
+for __(a)__ news and __(b)__ Twitter.
+
+## Biexponential model parameters
+
+News:
+
+```{r, echo=!SUPP_INFO}
+coefs_N
+```
+
+Twitter:
+
+```{r, echo=!SUPP_INFO}
+coefs_T
+```
+\fi
+
+
+# Proportion of cultural vs. communicative memory
+
+```{r plot_comm_vs_cult_mem, fig.width=9, fig.height=3, echo=if (!SUPP_INFO) -c(1,4) else FALSE}
+par(mfrow=c(1,2))
+plot_comm_vs_cult_mem('NEWS', biexp_coefs=coefs_N)
+plot_comm_vs_cult_mem('TWITTER', biexp_coefs=coefs_T)
+par(.default_par)
+```
+
+`r figcap(TRUE)`
+Proportion of cultural vs. communicative memory.
+On day $t$ after death, the total collective memory according to the biexponential model fit is $S(t)=u(t)+v(t)$, where $u(t)$ is the communicative memory, and $v(t)$ is the cultural memory.
+We plot the proportion $v(t)/S(t)$ as a function of $t$.
+_Left:_ news. _Right:_ Twitter.
+
+
+
+# Mention time series characteristics
+
+## Summaries of distributions of mention time series characteristics
+
+__(a) News__
+```{r curve char summ N, echo=!SUPP_INFO}
+summ <- summary(stats_N[, c('mean_before', 'peak_mean_boost', 'perm_boost', 'time_till_half')])
+colnames(summ) <- FANCY_CURVE_CHAR_NAMES[trimws(colnames(summ))]
+summ
+```
+__(b) Twitter__
+```{r curve char summ T, echo=!SUPP_INFO}
+summ <- summary(stats_T[, c('mean_before', 'peak_mean_boost', 'perm_boost', 'time_till_half')])
+colnames(summ) <- FANCY_CURVE_CHAR_NAMES[trimws(colnames(summ))]
+summ
+```
+`r tabcap(TRUE)`
+Summaries of distribution of mention time series characteristics for __(a)__ the news and __(b)__ Twitter.
+
+`r vertskip`
+
+```{r curve char distribution plots N, fig.width=10, fig.height=2.5, echo=!SUPP_INFO}
+plot_smoothed_densities_raw(stats_N, 'NEWS', 'mid', list(unique(stats_N$mid)), main='NEWS')
+plot_smoothed_densities_raw(stats_T, 'TWITTER', 'mid', list(unique(stats_T$mid)), main='TWITTER')
+```
+`r figcap(TRUE)`
+Kernel-smoothed density plots of mention time series characteristics for the news (top) and Twitter (bottom).
+
+
+\ifshowall
+## Magnitude of short- and long-term boosts
+
+### 95% CI of short-term boost
+
+News:
+
+```{r, echo=!SUPP_INFO}
+boot_ci(stats_N$peak_mean_boost, median)
+```
+
+Twitter:
+
+```{r, echo=!SUPP_INFO}
+boot_ci(stats_T$peak_mean_boost, median)
+```
+
+### Comparison of short-term boosts in news vs. Twitter
+
+```{r, echo=!SUPP_INFO}
+wilcox.test(x=stats_N$peak_mean_boost, y=stats_T$peak_mean_boost, paired=TRUE, conf.int=TRUE)
+```
+
+### 95% CI of long-term boost
+
+News:
+
+```{r, echo=!SUPP_INFO}
+boot_ci(stats_N$perm_boost, median)
+```
+
+Twitter:
+
+```{r, echo=!SUPP_INFO}
+boot_ci(stats_T$perm_boost, median)
+```
+\fi
+
+
+## Mention time series characteristics by notability type
+
+__(a) News__
+
+```{r curve char by type group N, fig.width=10, fig.height=4, echo=!SUPP_INFO, warning=FALSE}
+plot_chars_by_group(stats_N, 'NEWS', stats_N$type_group, type_groups)
+```
+
+__(b) Twitter__
+
+```{r curve char by type group T, fig.width=10, fig.height=4, echo=!SUPP_INFO, warning=FALSE}
+plot_chars_by_group(stats_T, 'TWITTER', stats_T$type_group, type_groups)
+```
+`r figcap(TRUE)`
+Distributions of mention time series characteristics by notability type, visualized as box plots, for __(a)__ the news and __(b)__ Twitter.
+
+
+
+# Cluster analysis
+
+## Optimal number of clusters
+
+```{r compute clusters, fig.width=10, fig.height=4, echo=if (!SUPP_INFO) -c(1,4) else FALSE}
+par(mfrow=c(1,2))
+plot_sil_width('NEWS', cluster_result_N$clustering, cluster_result_N$diss)
+plot_sil_width('TWITTER', cluster_result_T$clustering, cluster_result_T$diss)
+par(.default_par)
+```
+`r figcap(TRUE)`
+Average silhouette width of clusterings produced by $k$-means algorithm, as a function of the number $k$ of clusters (higher is better), for $k \in \{2, \dots, 30\}$.
+Both __(a)__ in the news and __(b)__ on Twitter, $k=4$ is optimal.
+
+
+## Overlay of time series per cluster
+
+```{r plot clustered time series, fig.width=10, fig.height=2.5, echo=!SUPP_INFO}
+plot_clustered_time_series('NEWS', km_N, X_N)
+plot_clustered_time_series('TWITTER', km_T, X_T)
+```
+`r figcap(TRUE)`
+Overlay of time series in each cluster, for news (top) and Twitter (bottom).
+
+
+\ifshowall
+## Analysis of cluster confusion matrix
+
+### News and Twitter are not independent
+
+```{r echo=!SUPP_INFO}
+X <- table(as.factor(km_N$cluster), as.factor(km_T$cluster))
+chisq.test(X, simulate.p.value=TRUE, B=1e5)
+```
+
+### Log ratios of empirical vs. null probabilities
+
+Null probabilites represent the case where news and Twitter are assumed to be independent (with the constraint that cluster sizes must remain constant).
+
+The following matrix shows the log10 ratio of the empirical cluster size and the cluster size under the null model (rows are news cluster, columns are Twitter clusters).
+That is, positive values imply overrepresentation in the empirical data, and negative values, underrepresentation.
+We see that all diagonal entries are overrepresented, whereas all off-diagonal entries except two---$(3,4)$ and $(4,3)$---are underrepresented.
+
+```{r echo=!SUPP_INFO}
+X.indep <- (rowSums(X) %o% colSums(X)) / sum(X)
+log10(X / X.indep)
+```
+
+### Overrepresentation of diagonal entries
+
+To quantify the overrepresentation of the diagonal, we compute four diagonal sums (everything under the constraint that the row and column sums are fixed to the empirical values):
+
+1. the minimum possible,
+2. the independent null model,
+3. the empirical data,
+4. the maximum possible.
+
+The minimum and maximum are computed via linear programming.
+
+```{r echo=!SUPP_INFO}
+k <- nrow(X)
+objective.in <- as.vector(diag(nrow=k))
+const.mat <- rbind(t(diag(1,k) %x% rep(1,k)),
+                   t(rep(1,k) %x% diag(1,k)))
+const.rhs <- c(colSums(X), rowSums(X))
+const.dir <- rep('==', k)
+opt.max <- lp('max', objective.in, const.mat, const.dir, const.rhs)
+X.max <- matrix(opt.max$solution, k, k)
+opt.min <- lp('min', objective.in, const.mat, const.dir, const.rhs)
+X.min <- matrix(opt.min$solution, k, k)
+```
+
+The values of the four above-described diagonal sums are as follows:
+
+```{r echo=!SUPP_INFO}
+sums <- c(sum(diag(X.min)), sum(diag(X.indep)), sum(diag(X)), sum(diag(X.max)))
+sums
+```
+
+Normalizing by the min-to-max span, we see that the empirical diagonal gets 71% of the way between min and max, whereas the null only gets 32%, for a factor of 2.2.
+
+```{r echo=!SUPP_INFO}
+(sums - sum(diag(X.min))) / (sum(diag(X.max)) - sum(diag(X.min)))
+```
+
+### Overrepresentation of cluster combinations (3, 4) and (4, 3)
+
+On the contrary, nearly all off-diagonal entries are underrepresented, with the exception of $(4,3)$, which is not significantly different from the null:
+
+```{r echo=!SUPP_INFO}
+prop.test(X[4,3], sum(X), X.indep[4,3]/sum(X))
+```
+
+and $(3,4)$, which is massively overrepresented, compared to the null:
+
+```{r echo=!SUPP_INFO}
+prop.test(X[3,4], sum(X), X.indep[3,4]/sum(X))
+```
+\fi
+
+
+
+# Regression modeling
+
+Note: the variable names in the code may differ from those in the paper; see mapping in lists below.
+ 
+Independent variables:
+
+* pre-mortem mean (`mean_before`)
+* age at death (`age_group`)
+* manner of death (`death_type`)
+* notability type (`type_group`)
+* cultural background (`anglo`)
+* gender (`gender`)
+
+Dependendent variables:
+
+* short-term boost (`peak_mean_boost`)
+* long-term boost (`perm_boost`)
+
+## Models without interactions
+
+```{r run regressions, echo=!SUPP_INFO}
+predictors <- 'mean_before_relrank + age_group + death_type + gender + anglo + type_group'
+mod_N_peak <- lm(as.formula(sprintf('peak_mean_boost_relrank ~ %s', predictors)), lmdata_N)
+mod_T_peak <- lm(as.formula(sprintf('peak_mean_boost_relrank ~ %s', predictors)), lmdata_T)
+mod_N_perm <- lm(as.formula(sprintf('     perm_boost_relrank ~ %s', predictors)), lmdata_N)
+mod_T_perm <- lm(as.formula(sprintf('     perm_boost_relrank ~ %s', predictors)), lmdata_T)
+
+age_names <- sprintf("Age: %d--%d", seq(20,90,10)[-6], seq(29,99,10)[-6])
+type_names <- levels(lmdata_N$type_group)[-1]
+table <- texreg(list(mod_N_peak, mod_T_peak, mod_N_perm, mod_T_perm), dcolumn=TRUE, booktabs=TRUE,
+                use.packages=FALSE, digits=3, leading.zero=FALSE, single.row=TRUE, stars = c(0.001,0.01,0.05),
+                custom.model.names=c("\\shortstack{Short-term boost\\\\(News)}",
+                                     "\\shortstack{Short-term boost\\\\(Twitter)}",
+                                     "\\shortstack{Long-term boost\\\\(News)}",
+                                     "\\shortstack{Long-term boost\\\\(Twitter)}"),
+                custom.coef.names=c("(Intercept)", "Pre-mortem mean (relative rank)", age_names, "Manner of death: unnatural",
+                                    "Gender: female", paste("Cultural background:", c("non-anglophone", "unknown")),
+                                    paste("Notability type:", type_names)),
+                reorder.coef=c(1,2,10,12:13,11,14:18,3:9), table=FALSE)
+cat(table, file=sprintf('%s/lm_coef_T_and_N.tex', TABLEDIR), sep="\n")
+
+print(summary(mod_N_peak))
+```
+`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
+Linear regression model of short-term boost in the news.
+
+`r vertskip`
+
+```{r print regression tables N long, fig.width=12, fig.height=8, echo=!SUPP_INFO}
+print(summary(mod_N_perm))
+```
+`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
+Linear regression model of long-term boost in the news.
+
+`r vertskip`
+
+```{r print regression tables T short, fig.width=12, fig.height=8, echo=!SUPP_INFO}
+print(summary(mod_T_peak))
+```
+`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
+Linear regression model of short-term boost on Twitter.
+
+`r vertskip`
+
+```{r print regression tables T long, fig.width=12, fig.height=8, echo=!SUPP_INFO}
+print(summary(mod_T_perm))
+```
+`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
+Linear regression model of long-term boost on Twitter.
+
+
+## Models with "age by manner of death" interaction
+
+```{r run regression models with interactions, fig.width=10, fig.height=6, echo=if (!SUPP_INFO) -1 else FALSE}
+par(mfrow=c(2,2))
+mods_N <- run_regression_analysis_for_death_types('NEWS')
+mods_T <- run_regression_analysis_for_death_types('TWITTER')
+```
+`r figcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
+Dependence of post-mortem mention frequency on age at death for news (top) and Twitter (bottom).
+
+`r vertskip`
+
+```{r, echo=!SUPP_INFO}
+mod_peak_N <- mods_N$mod_peak
+mod_perm_N <- mods_N$mod_perm
+mod_peak_T <- mods_T$mod_peak
+mod_perm_T <- mods_T$mod_perm
+```
+
+```{r, echo=!SUPP_INFO}
+print(summary(mod_peak_N))
+```
+`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
+Linear regression model of short-term boost in the news, with added "age by manner of death" interaction.
+
+`r vertskip`
+
+```{r, echo=!SUPP_INFO}
+print(summary(mod_perm_N))
+```
+`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
+Linear regression model of long-term boost in the news, with added "age by manner of death" interaction.
+
+`r vertskip`
+
+```{r, echo=!SUPP_INFO}
+print(summary(mod_peak_T))
+```
+`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
+Linear regression model of short-term boost on Twitter, with added "age by manner of death" interaction.
+
+`r vertskip`
+
+```{r, echo=!SUPP_INFO}
+print(summary(mod_perm_T))
+```
+`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
+Linear regression model of long-term boost on Twitter, with added "age by manner of death" interaction.
+
+
+## Models of news-vs.-Twitter boost difference for fixed person (without interactions)
+
+```{r regression analysis NEWS vs. TWITTER, fig.width=5, fig.height=3, echo=!SUPP_INFO}
+lmdata <- lmdata_N
+lmdata$mean_before_relrank_N <- lmdata_N$mean_before_relrank
+lmdata$mean_before_relrank_T <- lmdata_T$mean_before_relrank
+lmdata$mean_before_relrank_diff <- lmdata$mean_before_relrank_N - lmdata$mean_before_relrank_T
+lmdata$peak_mean_boost_relrank_N <- lmdata_N$peak_mean_boost_relrank
+lmdata$peak_mean_boost_relrank_T <- lmdata_T$peak_mean_boost_relrank
+lmdata$peak_mean_boost_relrank_diff <- lmdata$peak_mean_boost_relrank_N - lmdata$peak_mean_boost_relrank_T
+lmdata$perm_boost_relrank_N <- lmdata_N$perm_boost_relrank
+lmdata$perm_boost_relrank_T <- lmdata_T$perm_boost_relrank
+lmdata$perm_boost_relrank_diff <- lmdata$perm_boost_relrank_N - lmdata$perm_boost_relrank_T
+
+predictors <- 'mean_before_relrank_diff + age_group + death_type + gender + anglo + type_group'
+mod_peak <- lm(as.formula(sprintf('peak_mean_boost_relrank_diff ~ %s', predictors)), lmdata)
+mod_perm <- lm(as.formula(sprintf('perm_boost_relrank_diff ~ %s', predictors)), lmdata)
+
+age_names <- sprintf("Age: %d--%d", seq(20,90,10)[-6], seq(29,99,10)[-6])
+type_names <- levels(lmdata_N$type_group)[-1]
+table <- texreg(list(mod_peak, mod_perm), dcolumn=TRUE, booktabs=TRUE,
+                use.packages=FALSE, digits=3, leading.zero=FALSE, single.row=TRUE, stars = c(0.001,0.01,0.05),
+                label = "table:coefficients News vs. Twitter", custom.model.names=c("Short-term boost", "Long-term boost"),
+                custom.coef.names=c("(Intercept)", "Pre-mortem mean (relative-rank diff.)", age_names,
+                                    "Manner of death: unnatural",
+                                    "Gender: female", paste("Cultural background:", c("non-anglophone", "unknown")),
+                                    paste("Notability type:", type_names)),
+                reorder.coef=c(1,2,10,12:13,11,14:18,3:9), table=FALSE)
+cat(table, file=sprintf('%s/lm_coef_T_vs_N.tex', TABLEDIR), sep="\n")
+
+print(summary(mod_peak))
+```
+`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
+Linear regression model of news-vs.-Twitter difference in short-term boost.
+
+`r vertskip`
+
+```{r, echo=!SUPP_INFO}
+print(summary(mod_perm))
+```
+`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
+Linear regression model of news-vs.-Twitter difference in long-term boost.
+
+## Models of news-vs.-Twitter boost difference for fixed person (with "age by manner of death" interaction)
+
+```{r regression N vs T, fig.width=10, fig.height=3, echo=!SUPP_INFO}
+predictors <- '0 + mean_before_relrank_diff + age_group + death_type + gender + anglo + type_group + age_group:death_type'
+mod_peak <- lm(as.formula(sprintf('peak_mean_boost_relrank_diff ~ %s', predictors)), lmdata)
+mod_perm <- lm(as.formula(sprintf('perm_boost_relrank_diff ~ %s', predictors)), lmdata)
+ylim <- c(-0.45, 0.45)
+par(mfrow=c(1,2))
+plot_age_coeffs_for_death_types(mod_peak, NA, 'peak_mean_boost_diff', 70, ylim, 'black')
+plot_age_coeffs_for_death_types(mod_perm, NA, 'perm_boost_diff', 70, ylim, 'black')
+```
+`r figcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
+Dependence of news-vs.-Twitter boost difference (for fixed person) on age at death.
+
+`r vertskip`
+
+```{r, echo=!SUPP_INFO}
+print(summary(mod_peak))
+```
+`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
+Linear regression model of news-vs.-Twitter difference in short-term boost, with added "age by manner of death" interaction.
+
+`r vertskip`
+
+```{r, echo=!SUPP_INFO}
+print(summary(mod_perm))
+```
+`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
+Linear regression model of news-vs.-Twitter difference in long-term boost, with added "age by manner of death" interaction.
+
+
+
+```{r mega figure, fig.width=10, fig.height=10, include=FALSE}
+draw_mega_figure()
+```
