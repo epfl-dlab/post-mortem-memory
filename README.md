@@ -6,6 +6,6 @@ The notebook that executes all analyses described in the main paper and in the S
 
 Most data files are self-descriptive. The core files containing information about the mention frequency of deceased public figures are these:
 
-* `num_dead_mentions_per_day_NEWS.tsv.gz` counts, for each person (column 1) and each day (column 2), the number of news articles (column 4) in which the person was mentioned *k* times (column 3) that day, where *k* can take on a value of 1, 2, or 3. Here, *k* = 3 means "at least 3 times", whereas *k* = 2 means "exactly 2 times" (and analogously for $k = 1$).
-* `num_dead_mentions_per_day_TWITTER.tsv.gz` counts tweets, rather than news articles.
+* `num_dead_mentions_per_day_NEWS.tsv.gz` counts, for each person (column 1) and each day (column 2), the number of news articles (column 4) in which the person was mentioned *k* times (column 3) that day, where *k* can take on a value of 1, 2, or 3. Here, *k* = 3 means "at least 3 mentions per article", whereas *k* = 2 means "exactly 2 mentions per article" and *k* = 1 means "exactly 1 mention per article".
+* `num_dead_mentions_per_day_TWITTER.tsv.gz` is analogous, but counts tweets, rather than news articles.
 
