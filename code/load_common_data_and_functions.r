@@ -140,19 +140,13 @@ select_from_tax <- function(level, value, tax, data) {
   names(data)[data %in% ok_values]
 }
 
-# medium must be 'news' or 'twitter'.
 get_num_art <- function(medium) {
-  medium <- tolower(medium)
-  if (medium == 'news') {
-    num_art_tbl <- read.table(sprintf('%s/num_articles_per_day_NEWS-VS-BLOGS.tsv', DATADIR),
-                              col.names=c('date', 'news_or_blogs', 'num'))
-    num_art_tbl <- num_art_tbl[num_art_tbl$news_or_blogs == 'N',]
-  } else if (medium == 'twitter') {
-    num_art_tbl <- read.table(sprintf('%s/num_articles_per_day_TWITTER.tsv', DATADIR),
-                              col.names=c('date', 'num'))
-  } else {
-    stop('medium must be "news" or "twitter"')
+  medium <- toupper(medium)
+  if (medium != 'NEWS' && medium != 'TWITTER') {
+    stop('Medium must be \'NEWS\' or \'TWITTER\'')
   }
+  num_art_tbl <- read.table(sprintf('%s/num_articles_per_day_%s.tsv', DATADIR, medium),
+                            col.names=c('date', 'num'))
   num_art <- num_art_tbl$num
   names(num_art) <- num_art_tbl$date
   num_art <- num_art[names(num_art) >= as.character(MIN_DATE) & names(num_art) <= as.character(MAX_DATE)]
@@ -163,64 +157,39 @@ get_num_art <- function(medium) {
 }
 
 get_mention_freq_table <- function(medium) {
-  medium <- tolower(medium)
-  # NEWS.
-  if (medium == 'news') {
-    file <- sprintf('%s/RData/dead_people_mentions_NEWS.RData', DATADIR)
-    if (!file.exists(file)) {
-      data <- read.table(pipe(sprintf('gunzip -c %s/num_dead_mentions_per_day_NEWS-VS-BLOGS.tsv.gz',
-                                      DATADIR)), comment.char='', sep='\t', quote='',
-                         col.names=c('mid', 'date', 'news_or_blogs', 'type', 'num_per_doc', 'num_doc'),
-                         colClasses=c('character', 'character', 'factor', 'factor', 'numeric', 'numeric'))
-      data <- data[data$news_or_blogs=='N',]
-      # Add a column having the number of days since death.
-      data$rel_date <- as.numeric(as.Date(data$date) - as.Date(death_dates[data$mid]))
-      save(data, file=file)
-    } else {
-      load(file)
-    }
+  medium <- toupper(medium)
+  if (medium != 'NEWS' && medium != 'TWITTER') {
+    stop('Medium must be \'NEWS\' or \'TWITTER\'')
   }
-  # TWITTER.
-  else if (medium == 'twitter') {
-    file <- sprintf('%s/RData/dead_people_mentions_TWITTER.RData', DATADIR)
-    if (!file.exists(file)) {
-      data <- read.table(pipe(sprintf('gunzip -c %s/num_dead_mentions_per_day_TWITTER.tsv.gz',
-                                      DATADIR)), comment.char='', sep='\t', quote='',
-                         col.names=c('mid', 'date', 'num_per_doc', 'num_doc'),
-                         colClasses=c('character', 'character', 'numeric', 'numeric'))
-      # Add a column having the number of days since death.
-      data$rel_date <- as.numeric(as.Date(data$date) - as.Date(death_dates[data$mid]))
-      save(data, file=file)
-    } else {
-      load(file)
-    }
-  }
-  # BAD MEDIUM.
-  else {
-    stop('medium must be "news" or "twitter"')
+  file <- sprintf('%s/RData/dead_people_mentions_%s.RData', DATADIR, medium)
+  if (!file.exists(file)) {
+    data <- read.table(pipe(sprintf('gunzip -c %s/num_dead_mentions_per_day_%s.tsv.gz', DATADIR, medium)),
+                       comment.char='', sep='\t', quote='',
+                       col.names=c('mid', 'date', 'num_per_doc', 'num_doc'),
+                       colClasses=c('character', 'character', 'numeric', 'numeric'))
+    # Add a column having the number of days since death.
+    data$rel_date <- as.numeric(as.Date(data$date) - as.Date(death_dates[data$mid]))
+    save(data, file=file)
+  } else {
+    load(file)
   }
   return(data)
 }
 
-# medium must be 'news' or 'twitter'.
 get_rel_date_matrix <- function(medium, data, num_art, chunk_size) {
-  medium <- tolower(medium)
-    chunks <- floor(((1:NRELDATES)-(NRELDATES+1)/2)/chunk_size)
+  medium <- toupper(medium)
+  chunks <- floor(((1:NRELDATES)-(NRELDATES+1)/2)/chunk_size)
   sum.na.rm <- function(x) sum(x, na.rm=TRUE)
-  if (medium == 'news') {
-    type <- 'TC'
+  if (medium == 'NEWS') {
     min_num_per_doc <- 2
-    file <- sprintf('%s/RData/num_mentions_per_rel_date_NEWS_min_num_per_doc=%s_chunk_size=%s.RData',
-                    DATADIR, min_num_per_doc, chunk_size)
-    idx <- which(data$type==type & data$num_per_doc >= min_num_per_doc)
-  } else if (medium == 'twitter') {
+  } else if (medium == 'TWITTER') {
     min_num_per_doc <- 1
-    file <- sprintf('%s/RData/num_mentions_per_rel_date_TWITTER_min_num_per_doc=%s_chunk_size=%s.RData',
-                    DATADIR, min_num_per_doc, chunk_size)
-    idx <- which(data$num_per_doc >= min_num_per_doc)
   } else {
-    stop('medium must be "news" or "twitter"')
+    stop('Medium must be \'NEWS\' or \'TWITTER\'')
   }
+  idx <- which(data$num_per_doc >= min_num_per_doc)
+  file <- sprintf('%s/RData/num_mentions_per_rel_date_%s_min_num_per_doc=%s_chunk_size=%s.RData',
+                  DATADIR, medium, min_num_per_doc, chunk_size)
   if (!file.exists(file)) {
     x <- do.call(rbind, mclapply(split(data[idx,], data$mid[idx]), function(l) {
       dod <- as.Date(death_dates[l$mid[1]])
@@ -295,16 +264,13 @@ supersmooth <- function(y) {
 }
 
 normalize_and_smooth <- function(medium, x, num_art, mean_center=TRUE) {
-  medium <- tolower(medium)
+  medium <- toupper(medium)
   # Smoothing term: we add 1 mention (as computed on the highest-volume day) to each day.
   eps <- 1 / max(num_art, na.rm=TRUE)
-  if (medium == 'news') {
-    file <- sprintf('%s/RData/clustering_input_NEWS%s.RData', DATADIR, if (mean_center) '_MEANCENTERED' else '')
-  } else if (medium == 'twitter') {
-    file <- sprintf('%s/RData/clustering_input_TWITTER%s.RData', DATADIR, if (mean_center) '_MEANCENTERED' else '')
-  } else {
-    stop('medium must be "news" or "twitter"')
+  if (medium != 'NEWS' && medium != 'TWITTER') {
+    stop('Medium must be \'NEWS\' or \'TWITTER\'')
   }
+  file <- sprintf('%s/RData/clustering_input_%s%s.RData', DATADIR, medium, if (mean_center) '_MEANCENTERED' else '')
   if (!file.exists(file)) {
     # Select the subset of reldates; keep a month of padding, so smoothing is more robust at the
     # boundaries,
