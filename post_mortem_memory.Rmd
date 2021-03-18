@@ -32,9 +32,6 @@ INCLUDE_REGRESSION_IN_SUPP_INFO <- TRUE
 ```
 
 ```{r load data and functions, echo=!SUPP_INFO, results="hide", message=FALSE}
-# This script is self-contained, with the exceptions that some functions are located
-# in load_common_data_and_functions.r
-
 library(Matrix)
 library(cluster)
 library(lattice)
@@ -48,8 +45,6 @@ library(nnet)
 library(xtable)
 library(lpSolve)
 library(knitr)
-
-source(sprintf('%s/github/post-mortem-memory/code/load_common_data_and_functions.r', Sys.getenv('HOME')))
 
 .default_par <- par(no.readonly=TRUE)
 
