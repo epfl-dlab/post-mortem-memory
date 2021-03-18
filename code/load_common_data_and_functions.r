@@ -141,7 +141,6 @@ select_from_tax <- function(level, value, tax, data) {
 }
 
 get_num_art <- function(medium) {
-  medium <- toupper(medium)
   if (medium != 'NEWS' && medium != 'TWITTER') {
     stop('Medium must be \'NEWS\' or \'TWITTER\'')
   }
@@ -157,7 +156,6 @@ get_num_art <- function(medium) {
 }
 
 get_mention_freq_table <- function(medium) {
-  medium <- toupper(medium)
   if (medium != 'NEWS' && medium != 'TWITTER') {
     stop('Medium must be \'NEWS\' or \'TWITTER\'')
   }
@@ -177,9 +175,6 @@ get_mention_freq_table <- function(medium) {
 }
 
 get_rel_date_matrix <- function(medium, data, num_art, chunk_size) {
-  medium <- toupper(medium)
-  chunks <- floor(((1:NRELDATES)-(NRELDATES+1)/2)/chunk_size)
-  sum.na.rm <- function(x) sum(x, na.rm=TRUE)
   if (medium == 'NEWS') {
     min_num_per_doc <- 2
   } else if (medium == 'TWITTER') {
@@ -187,6 +182,8 @@ get_rel_date_matrix <- function(medium, data, num_art, chunk_size) {
   } else {
     stop('Medium must be \'NEWS\' or \'TWITTER\'')
   }
+  chunks <- floor(((1:NRELDATES)-(NRELDATES+1)/2)/chunk_size)
+  sum.na.rm <- function(x) sum(x, na.rm=TRUE)
   idx <- which(data$num_per_doc >= min_num_per_doc)
   file <- sprintf('%s/RData/num_mentions_per_rel_date_%s_min_num_per_doc=%s_chunk_size=%s.RData',
                   DATADIR, medium, min_num_per_doc, chunk_size)
@@ -216,14 +213,12 @@ get_rel_date_matrix <- function(medium, data, num_art, chunk_size) {
       # Sum within chunks.
       s <- tapply(y, chunks, sum.na.rm) / tapply(n, chunks, sum.na.rm)
       # Set to NA the days before TWITTER_START_DATE in the case of Twitter.
-      if (medium == 'twitter') {
+      if (medium == 'TWITTER') {
         s[as.numeric(as.Date(DAYS[as.Date(DAYS) < TWITTER_START_DATE])-dod) + offset] <- NA
       }
       return(s)
-    }))
+    }, mc.cores=6))
     x <- as.matrix(x)
-    rownames(x) <- unique(data$mid[idx])
-    colnames(x) <- as.character(unique(chunks))
     save(x, file=file)
   } else {
     load(file)
@@ -264,12 +259,11 @@ supersmooth <- function(y) {
 }
 
 normalize_and_smooth <- function(medium, x, num_art, mean_center=TRUE) {
-  medium <- toupper(medium)
-  # Smoothing term: we add 1 mention (as computed on the highest-volume day) to each day.
-  eps <- 1 / max(num_art, na.rm=TRUE)
   if (medium != 'NEWS' && medium != 'TWITTER') {
     stop('Medium must be \'NEWS\' or \'TWITTER\'')
   }
+  # Smoothing term: we add 1 mention (as computed on the highest-volume day) to each day.
+  eps <- 1 / max(num_art, na.rm=TRUE)
   file <- sprintf('%s/RData/clustering_input_%s%s.RData', DATADIR, medium, if (mean_center) '_MEANCENTERED' else '')
   if (!file.exists(file)) {
     # Select the subset of reldates; keep a month of padding, so smoothing is more robust at the

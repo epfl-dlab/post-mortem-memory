@@ -8,6 +8,9 @@ output:
 ---
 
 ```{r include=FALSE}
+# Set this to FALSE if you don't want to save plots to PDFs.
+SAVE_PLOTS <- FALSE
+
 # Begin of nasty trick from here: https://stackoverflow.com/a/46686678
 SUPP_INFO <- FALSE
 INCLUDE_REGRESSION_IN_SUPP_INFO <- TRUE
@@ -49,9 +52,6 @@ source(sprintf('%s/github/post-mortem-memory/code/load_common_data_and_functions
 
 .default_par <- par(no.readonly=TRUE)
 
-# Set this to FALSE if you don't want to save plots to PDFs.
-# SAVE_PLOTS <- FALSE
-SAVE_PLOTS <- TRUE
 PLOTDIR <- sprintf('%s/plots/', BASEDIR)
 TABLEDIR <- sprintf('%s/tables/', BASEDIR)
 
@@ -87,20 +87,121 @@ ANGLO_COUNTRY_REGEX <- 'United States|United Kingdom|Canada|England|Australia|Sc
 
 type_groups <- c('art', 'sports', 'leadership', 'known for death', 'general fame', 'academia/engineering')
 
-r <- function(x) {
-  n <- length(x)
-  # Keys: indices in x; values: ranks.
-  rank_map <- 1:n
-  names(rank_map) <- order(x)
-  rank_map[as.character(1:n)]
+# Normalize the time series to [0,1] and measure the fraction of time it takes until half of the
+# total post-mortem volume has been seen. The simplest version maps the min to 0, but this is quite
+# sensitive to low outliers, so we also allow for versions where we first set to 0 all values
+# less than the specified quantile.
+time_till_half <- function(y, thresh_quantile=0) {
+  # Start with the day after death, since the news might not be reporting yet on the day of.
+  y <- y[as.numeric(names(y)) >= 1]
+  y <- pmax(y, quantile(y, thresh_quantile))
+  y <- (y - min(y)) / (max(y) - min(y))
+  min(which(cumsum(y) >= 0.5*sum(y))) / length(y)
 }
 
-load_stats <- function(medium) {
+compute_curve_stats <- function(medium, x, X, num_art) {
   if (medium != 'NEWS' && medium != 'TWITTER') {
     stop('Medium must be \'NEWS\' or \'TWITTER\'')
   }
-  stats <- read.table(sprintf('%s/mention_freq_for_spreadsheet_%s.csv', DATADIR, medium),
-                      header=TRUE, sep='\t', comment.char='', quote='')
+
+  file <- sprintf('%s/mention_freq_for_spreadsheet_%s.csv', DATADIR, medium)
+  if (!file.exists(file)) {
+    # Find the people that died (un)natural deaths.
+    mids <- rownames(x)
+    mid_nat <- intersect(mids, names(which(get_cause_of_death_map()==1)))
+    mid_unnat <- intersect(mids, names(which(get_cause_of_death_map()==-1)))
+
+    # The number of days we consider before and after death.
+    subrange_before <- -N:-30
+    subrange_peak <- 0:29
+    subrange_after <- 30:N
+    
+    x <- x[,colnames(x) %in% -N:N]
+    
+    num_active <- rowSums(x > 0, na.rm=TRUE)
+    num_active_before <- rowSums(x[,colnames(x) %in% -N:-1] > 0, na.rm=TRUE)
+    num_active_after <- rowSums(x[,colnames(x) %in% 0:N] > 0, na.rm=TRUE)
+    
+    num_finite_before <- rowSums(is.finite(x[,colnames(x) %in% -N:-1]))
+    num_finite_after <- rowSums(is.finite(x[,colnames(x) %in% 0:N]))
+    
+    stats <- data.frame(mid=NA,
+                        name=NA,
+                        image=NA,
+                        num_active_days=NA,
+                        active_fraction_before=NA,
+                        active_fraction_after=NA,
+                        max_smoothed_before=NA,
+                        max_raw_before=NA,
+                        mean_before=NA,
+                        mean_after=NA,
+                        mean_after_peak=NA,
+                        peak_smoothed=NA,
+                        peak_raw=NA,
+                        peak_raw_day=NA,
+                        time_till_half=NA,
+                        time_till_half_thresh=NA,
+                        natural_death=NA,
+                        unnatural_death=NA,
+                        gender=NA,
+                        cause_of_death=NA,
+                        age=NA,
+                        notable_type=NA)[-1,]
+
+    for (i in 1:nrow(X)) {
+      if (i %% 100 == 0) print(i)
+      mid <- rownames(X)[i]
+      name <- fancy_wiki(mid_to_wiki[mid])
+      img_name <- if (!is.na(name)) gsub('(%(25)?..)+', '+', name) else sprintf('NA_%s', gsub('.*/m\\.(.*)>', '\\1', mid))
+      raw <- log10(x[mid,])
+      smoothed <- X[mid,]
+      
+      mean_before <- mean(smoothed[names(smoothed) %in% subrange_before], na.rm=TRUE)
+      peak_smoothed <- max(smoothed[names(smoothed) %in% subrange_peak])
+      peak_raw <- max(raw[names(raw) %in% subrange_peak])
+      # -1 such that 0 represents day of death.
+      peak_raw_day <- which.max(raw[names(raw) %in% subrange_peak]) - 1
+      
+      stats[mid,] <- c(
+        fancy_mid(mid),
+        name,
+        sprintf('=image("http://infolab.stanford.edu/~west1/death/mention_freq_curves/%s/%s.png")',
+                medium, img_name),
+        num_active[mid],
+        num_active_before[mid]/num_finite_before[mid],
+        num_active_after[mid]/num_finite_after[mid],
+        max(smoothed[names(smoothed) %in% subrange_before], na.rm=TRUE),
+        max(raw[names(raw) %in% subrange_before], na.rm=TRUE),
+        mean_before,
+        mean(smoothed[names(smoothed) %in% c(subrange_peak, subrange_after)]),
+        mean(smoothed[names(smoothed) %in% subrange_after]),
+        peak_smoothed,
+        peak_raw,
+        peak_raw_day,
+        time_till_half(smoothed),
+        time_till_half(smoothed, 0.25),
+        if (mid %in% mid_nat) 1 else 0,
+        if (mid %in% mid_unnat) 1 else 0,
+        as.character(props[mid, 'gender']),
+        as.character(props[mid, 'cause_of_death']),
+        props[mid, 'age'],
+        as.character(props[mid, 'notable_types'])
+      )
+    }
+
+    # Write the data into a CSV file.
+    write.table(stats, file, quote=FALSE, sep='\t', row.names=FALSE)
+  } else {
+    stats <- read.table(file, header=TRUE, sep='\t', comment.char='', quote='')
+  }
+  return(stats)
+}
+
+load_stats <- function(medium, x, X, num_art) {
+  if (medium != 'NEWS' && medium != 'TWITTER') {
+    stop('Medium must be \'NEWS\' or \'TWITTER\'')
+  }
+  stats <- compute_curve_stats(medium, x, X, num_art)
   rownames(stats) <- long_mid(stats$mid)
   # If the person has 0 mentions on the day of death, the log will be -Inf.
   # Replace those by the smallest finite number.
@@ -112,6 +213,13 @@ load_stats <- function(medium) {
   stats$perm_boost <- stats$mean_after_peak - stats$mean_before
   stats$perm_boost_all <- stats$mean_after - stats$mean_before
   # Some rank transforms.
+  r <- function(x) {
+    n <- length(x)
+    # Keys: indices in x; values: ranks.
+    rank_map <- 1:n
+    names(rank_map) <- order(x)
+    rank_map[as.character(1:n)]
+  }
   stats$mean_before_rank <- r(stats$mean_before)
   stats$mean_after_rank <- r(stats$mean_after)
   stats$peak_mean_boost_rank <- r(stats$peak_mean_boost)
@@ -884,11 +992,6 @@ draw_mega_figure <- function() {
   if (SAVE_PLOTS) dev.off()
 }
 
-stats_all <- load_stats_all()
-
-stats_N <- load_stats('NEWS')
-stats_T <- load_stats('TWITTER')
-
 num_art_N <- get_num_art('NEWS')
 num_art_T <- get_num_art('TWITTER')
 
@@ -907,6 +1010,11 @@ x_T <- x_T[mids,]
 
 X_N <- normalize_and_smooth('NEWS', x_N, num_art_N, mean_center=FALSE)
 X_T <- normalize_and_smooth('TWITTER', x_T, num_art_T, mean_center=FALSE)
+
+stats_all <- load_stats_all()
+
+stats_N <- load_stats('NEWS', x_N, X_N, num_art_N)
+stats_T <- load_stats('TWITTER', x_T, X_T, num_art_T)
 
 lmdata_N <- make_regression_data('NEWS')
 lmdata_T <- make_regression_data('TWITTER')
