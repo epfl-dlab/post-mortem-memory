@@ -1014,8 +1014,8 @@ plot_clustered_time_series <- function(medium, kmeans, X) {
   par(.default_par)
 }
 
-boot_ci <- function(x, func) {
-  bo <- boot(x, statistic=function(d, i) func(d[i]), R=5000)
+boot_ci <- function(x, func, R=5000) {
+  bo <- boot(x, statistic=function(d, i) func(d[i]), R=R)
   ci <- boot.ci(bo, conf=0.95, type="basic")$basic[4:5]
   if (is.null(ci)) {
     upper <- lower <- NA
@@ -1599,18 +1599,20 @@ Kernel-smoothed density plots of mention time series characteristics for the new
 \ifshowall
 ## Magnitude of short- and long-term boosts
 
-### 95% CI of short-term boost
+### Short-term boost
 
 News:
 
 ```{r, echo=!SUPP_INFO}
 boot_ci(stats_N$peak_mean_boost, median)
+wilcox.test(stats_N$peak_mean_boost, mu=0, conf.int=TRUE)
 ```
 
 Twitter:
 
 ```{r, echo=!SUPP_INFO}
 boot_ci(stats_T$peak_mean_boost, median)
+wilcox.test(stats_T$peak_mean_boost, mu=0, conf.int=TRUE)
 ```
 
 ### Comparison of short-term boosts in news vs. Twitter
@@ -1619,18 +1621,26 @@ boot_ci(stats_T$peak_mean_boost, median)
 wilcox.test(x=stats_N$peak_mean_boost, y=stats_T$peak_mean_boost, paired=TRUE, conf.int=TRUE)
 ```
 
-### 95% CI of long-term boost
+### Long-term boost
 
 News:
 
 ```{r, echo=!SUPP_INFO}
 boot_ci(stats_N$perm_boost, median)
+wilcox.test(stats_N$perm_boost, mu=0, conf.int=TRUE)
 ```
 
 Twitter:
 
 ```{r, echo=!SUPP_INFO}
 boot_ci(stats_T$perm_boost, median)
+wilcox.test(stats_T$perm_boost, mu=0, conf.int=TRUE)
+```
+
+### Comparison of long-term boosts in news vs. Twitter
+
+```{r, echo=!SUPP_INFO}
+wilcox.test(x=stats_N$perm_boost, y=stats_T$perm_boost, paired=TRUE, conf.int=TRUE)
 ```
 \fi
 
