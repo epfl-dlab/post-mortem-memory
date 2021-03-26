@@ -1340,6 +1340,23 @@ par(.default_par)
 `r figcap(TRUE)`
 Number of documents per day in the Spinn3r corpus.
 
+\ifshowall
+## Average daily number of documents by year
+
+News:
+
+```{r}
+tapply(num_art_N, substring(names(num_art_N),0,4), function(x) mean(x, na.rm=TRUE))
+```
+
+Twitter:
+
+```{r}
+tapply(num_art_T, substring(names(num_art_T),0,4), function(x) mean(x, na.rm=TRUE))
+```
+\fi
+
+
 # Taxonomy of causes of death
 
 ## Natural causes of death
@@ -1534,6 +1551,7 @@ plot_avg_fraction_of_mentioning_docs('TWITTER', biexp_coefs=coefs_T)
 Average mention time series, obtained via the arithmetic mean of the individual raw mention time series of the people included in the study,
 for __(a)__ news and __(b)__ Twitter.
 
+
 ## Biexponential model parameters
 
 News:
@@ -1660,6 +1678,7 @@ plot_chars_by_group(stats_T, 'TWITTER', stats_T$type_group, type_groups)
 ```
 `r figcap(TRUE)`
 Distributions of mention time series characteristics by notability type, visualized as box plots, for __(a)__ the news and __(b)__ Twitter.
+Boxes are bounded by the first and third quartiles; whiskers extend 1.5 inter-quartile ranges beyond the first and third quartiles (or to the minimum/maximum in case they fall within 1.5 inter-quartile ranges); the center bars mark medians, with notches corresponding to 95% confidence intervals of the median.
 
 
 
