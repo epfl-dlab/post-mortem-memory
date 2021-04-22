@@ -730,7 +730,7 @@ plot_max_mem_hist <- function(medium) {
   return(list(hist=h, max_days=max_days))
 }
 
-biexp_fit <- function(medium) {
+make_df_for_fit <- function(medium) {
   if (medium == 'NEWS') {
     x <- x_N
   } else if (medium == 'TWITTER') {
@@ -739,12 +739,15 @@ biexp_fit <- function(medium) {
     stop("medium must be NEWS or TWITTER!")
   }
   
-  days <- 1:400
-  # Map the first post-mortem day to t = 0.
-  t <- days-1
+  t <- 1:400
   eps <- min(x[x>0], na.rm=TRUE)
-  y <- 10^colMeans(log10(x[,colnames(x) %in% days] + eps), na.rm=TRUE)
+  y <- 10^colMeans(log10(x[,colnames(x) %in% t] + eps), na.rm=TRUE)
   df <- data.frame(y=y, t=t)
+  return(df)
+}
+
+biexp_fit <- function(medium) {
+  df <- make_df_for_fit(medium)
   
   # First approximation: r = 0.
   # log(y) ~ log(N*exp(-p*t)) = log(N)-p*t
@@ -764,11 +767,70 @@ biexp_fit <- function(medium) {
   model <- nls(log(y) ~ log( N/(p-q+r) * ((p-q)*exp(-(p+r)*t) + r*exp(-q*t)) ),
                start=list(p=p1, N=N1, r=r1, q=0),
                data=df, control=list(maxiter=1e8), algorithm='port', lower=c(q=0))
-  
-  return(coef(model))
+  return(model)
 }
 
-plot_avg_fraction_of_mentioning_docs <- function(medium, biexp_coefs=NULL) {
+exp_fit <- function(medium) {
+  df <- make_df_for_fit(medium)
+  # log(y) ~ log(a*exp(-b*t)) = log(a)-b*t
+  model <- lm(log(y) ~ t, data=df)
+  return(model)
+}
+
+lognorm_fit <- function(medium) {
+  df <- make_df_for_fit(medium)
+  # log(y) ~ a + b*log(t) + c*log(t)^2
+  model <- lm(log(y) ~ log(t) + I(log(t)^2), data=df)
+  return(model)
+}
+
+lognorm_constrained_fit <- function(medium) {
+  df <- make_df_for_fit(medium)
+  df$combo <- log(df$t)^2 - 2*log(max(df$t))*log(df$t)
+  # Requiring the vertex to be at the maximum time value introduces the constraint
+  # b = -2c*log(t_max), which reduces the problem to the following:
+  # log(y) ~ a + c*(log(t)^2 - 2*log(t_max)*log(t))
+  model <- lm(log(y) ~ combo, data=df)
+  return(model)
+}
+
+power_fit <- function(medium) {
+  df <- make_df_for_fit(medium)
+  # log(y) ~ a + b*log(t)
+  model <- lm(log(y) ~ log(t), data=df)
+  return(model)
+}
+
+log_fit <- function(medium) {
+  df <- make_df_for_fit(medium)
+  # y ~ a + b*log(t)
+  model0 <- lm(y ~ log(t), data=df)
+  a0 <- coef(model0)[1]
+  b0 <- coef(model0)[2]
+  # Necessary to avoid negative argument to log in nls fit (for TWITTER only).
+  if (a0 + b0*log(max(df$t)) <= 0) a0 <- -b0*log(max(df$t)) + 1e-8
+  # log(y) ~ log(a + b*log(t))
+  model <- nls(log(y) ~ log(a + b*log(t)),
+               # Without "/2", we fail to find an optimum in the case of TWITTER.
+               start=list(a=a0/2, b=b0/2),
+               data=df, control=list(maxiter=1e8))
+  return(model)
+}
+
+hyperbolic_fit <- function(medium) {
+  df <- make_df_for_fit(medium)
+  # 1/y ~ a + b*t
+  model0 <- lm(1/y ~ t, data=df)
+  a0 <- coef(model0)[1]
+  b0 <- coef(model0)[2]
+  # log(y) ~ -log(a + b*t)
+  model <- nls(log(y) ~ -log(a + b*t),
+               start=list(a=a0, b=b0),
+               data=df, control=list(maxiter=1e8), algorithm='port')
+  return(model)
+}
+
+plot_avg_fraction_of_mentioning_docs <- function(medium, biexp_model=NULL) {
   if (SAVE_PLOTS) pdf(sprintf('%s/avg_mention_curve_%s.pdf', PLOTDIR, medium), width=3.4, height=3.4,
                       pointsize=8, family='Helvetica', useDingbats=FALSE)
   par(mar=c(3,3,1,1))
@@ -794,21 +856,21 @@ plot_avg_fraction_of_mentioning_docs <- function(medium, biexp_coefs=NULL) {
   arrows(x0=325, x1=355, y0=y365, y1=y365, length=0.05)
   text(325, y365, '365 days', adj=c(1.1, 0.5))
 
-  if (!is.null(biexp_coefs)) {
+  if (!is.null(biexp_model)) {
+    biexp_coefs <- coef(biexp_model)
     N <- biexp_coefs['N']
     p <- biexp_coefs['p']
     r <- biexp_coefs['r']
     q <- biexp_coefs['q']
 
-    t <- 0:(max(days)-1)
+    t <- 1:max_day
     mem_comm <- N * exp(-(p+r)*t)
     mem_cult <- N/(p-q+r)*r * (exp(-q*t) - exp(-(p+r)*t))
     mem <- mem_comm + mem_cult
     
-    tt <- t+1
-    lines(tt, log10(mem_comm), lty=1, lwd=2, col=COL_GREEN)
-    lines(tt, log10(mem_cult), lty=1, lwd=2, col=COL_RED)
-    lines(tt, log10(mem), lty=1, lwd=2, col='black')
+    lines(t, log10(mem_comm), lty=1, lwd=2, col=COL_GREEN)
+    lines(t, log10(mem_cult), lty=1, lwd=2, col=COL_RED)
+    lines(t, log10(mem), lty=1, lwd=2, col='black')
 
     legend('topright', bty='n',
            legend=c('Daily average', 'Biexponential fit S(t) = u(t) + v(t)',
@@ -819,17 +881,61 @@ plot_avg_fraction_of_mentioning_docs <- function(medium, biexp_coefs=NULL) {
            col=c(COL[[medium]], 'black', COL_GREEN, COL_RED),
            lwd=c(2, 2, 2, 2))
     
-    # Log-log.  
+    # Log-log.
     par(fig=c(0.35, 0.9, 0.27, 0.77), new=TRUE)
-    y <- y[names(y) %in% tt]
+    y <- y[names(y) %in% t]
     # Here the day of death is shown as day 1 (due to log axes).
-    plot(tt, y, type='p', bty='n', xlab='', ylab='', lwd=2, col=COL[[medium]], las=0, log='x')
-    lines(tt, log10(mem_comm), lty=1, lwd=2, col=COL_GREEN)
-    lines(tt, log10(mem_cult), lty=1, lwd=2, col=COL_RED)
-    lines(tt, log10(mem), lty=1, lwd=2, col='black')
+    plot(t, y, type='p', bty='n', xlab='', ylab='', lwd=2, col=COL[[medium]], las=0, log='x')
+    lines(t, log10(mem_comm), lty=1, lwd=2, col=COL_GREEN)
+    lines(t, log10(mem_cult), lty=1, lwd=2, col=COL_RED)
+    lines(t, log10(mem), lty=1, lwd=2, col='black')
     legend('topright', bty='n', legend='Log x-scale', inset=c(0.1,0.2))
   }
 
+  if (SAVE_PLOTS) dev.off()
+}
+
+plot_model_fit <- function(medium, name, model, predict, log='') {
+  if (medium == 'NEWS') {
+    x <- x_N
+  } else if (medium == 'TWITTER') {
+    x <- x_T
+  } else {
+    stop("medium must be NEWS or TWITTER!")
+  }
+  max_day <- 400
+  t <- 1:max_day
+  eps <- min(x[x>0], na.rm=TRUE)
+  y <- colMeans(log10(x[,colnames(x) %in% t] + eps), na.rm=TRUE)
+  par(mar=c(3,3,1,1))
+  plot(t, y, type='p', bty='n', lwd=2,
+       xlab='', ylab='',
+       col=COL[[medium]], las=0, log=log)
+  mtext('Days since death', side=1, line=2, cex=0.6)
+  mtext('Mention frequency [log10]', side=2, line=2, cex=0.6)
+  lines(t, log10(predict), lwd=2)
+
+  if (log=='') text(200, max(y), name, adj=c(0.5,1), cex=1.7)
+  else text(400, max(y), sprintf('AIC = %.0f', AIC(model)), adj=c(1,1), cex=1)
+}
+
+plot_all_model_fits <- function(medium) {
+  models <- list("Biexponential"=biexp_fit(medium),
+                 "Log-normal-inspired"=lognorm_fit(medium),
+                 "Log-normal-inspired\n(constrained)"=lognorm_constrained_fit(medium),
+                 "Power"=power_fit(medium),
+                 "Logarithmic"=log_fit(medium),
+                 "Hyperbolic"=hyperbolic_fit(medium),
+                 "Exponential"=exp_fit(medium))
+  if (SAVE_PLOTS) pdf(sprintf('%s/all_model_fits_%s.pdf', PLOTDIR, medium),
+                      width=3.5, height=9, pointsize=8, family='Helvetica', useDingbats=FALSE)
+  par(mfcol=c(7,2))
+  for (log in c('', 'x')) {
+    for (name in names(models)) {
+      model <- models[[name]]
+      plot_model_fit(medium, name, model, exp(predict(model)), log=log)
+    }
+  }
   if (SAVE_PLOTS) dev.off()
 }
 
@@ -1531,20 +1637,20 @@ __Twitter:__
 # Average mention time series
 
 ```{r, echo=!SUPP_INFO}
-coefs_N <- biexp_fit('NEWS')
-coefs_T <- biexp_fit('TWITTER')
+biexp_model_N <- biexp_fit('NEWS')
+biexp_model_T <- biexp_fit('TWITTER')
 ```
 
 `r '__(a) News__'`
 
 ```{r, fig.width=6, fig.height=5, echo=!SUPP_INFO}
-plot_avg_fraction_of_mentioning_docs('NEWS', biexp_coefs=coefs_N)
+plot_avg_fraction_of_mentioning_docs('NEWS', biexp_model=biexp_model_N)
 ```
 
 `r '__(b) Twitter__'`
 
 ```{r, fig.width=6, fig.height=5, echo=!SUPP_INFO}
-plot_avg_fraction_of_mentioning_docs('TWITTER', biexp_coefs=coefs_T)
+plot_avg_fraction_of_mentioning_docs('TWITTER', biexp_model=biexp_model_T)
 ```
 
 `r figcap(!SUPP_INFO)`
@@ -1557,23 +1663,22 @@ for __(a)__ news and __(b)__ Twitter.
 News:
 
 ```{r, echo=!SUPP_INFO}
-coefs_N
+coef(biexp_model_N)
 ```
 
 Twitter:
 
 ```{r, echo=!SUPP_INFO}
-coefs_T
+coef(biexp_model_T)
 ```
 \fi
-
 
 # Proportion of cultural vs. communicative memory
 
 ```{r plot_comm_vs_cult_mem, fig.width=9, fig.height=3, echo=if (!SUPP_INFO) -c(1,4) else FALSE}
 par(mfrow=c(1,2))
-plot_comm_vs_cult_mem('NEWS', biexp_coefs=coefs_N)
-plot_comm_vs_cult_mem('TWITTER', biexp_coefs=coefs_T)
+plot_comm_vs_cult_mem('NEWS', biexp_coefs=coef(biexp_model_N))
+plot_comm_vs_cult_mem('TWITTER', biexp_coefs=coef(biexp_model_T))
 par(.default_par)
 ```
 
@@ -1583,6 +1688,34 @@ On day $t$ after death, the total collective memory according to the biexponenti
 We plot the proportion $v(t)/S(t)$ as a function of $t$.
 _Left:_ news. _Right:_ Twitter.
 
+
+# Alternative models
+
+```{r alternative_models_N, fig.width=5, fig.height=11, echo=!SUPP_INFO}
+plot_all_model_fits('NEWS')
+```
+
+```{r alternative_models_T, fig.width=5, fig.height=11, echo=!SUPP_INFO}
+plot_all_model_fits('TWITTER')
+```
+
+`r figcap(TRUE)`
+Comparison of six models $S(t)$ for fitting empirical mention frequencies.
+_Top (yellow):_ news.
+_Bottom (blue):_ Twitter.
+The left and right plots in each row show the same fits, the only difference being that the left plots have linear $x$-axes, whereas the right plots have logarithmic $x$-axes.
+Fits are nonlinear least-squares fits obtained in log space, i.e., logarithms were taken of both the data and the model $S(t)$ before performing the least-squares optimization (see equation (5) in the paper for the case of the biexponential model).
+The biexponential function is defined in equation (4) of the paper.
+The other functions are defined as follows:
+*Log-normal-inspired:* $S(t) = \exp(a' - b \log t + c (\log t)^2) = a \, t^{-b + c\log t}$. (We call this function "log-normal-inspired" because it takes the functional form of the log-normal distribution, but is not a probability distribution.)
+*Power:* $S(t) = a \, t^{-b}$.
+*Logarithmic:* $S(t) = a - b \log t$.
+*Hyperbolic:* $S(t) = (a + bt)^{-1}$.
+*Exponential:* $S(t) = a \, e^{-bt}$.
+The Akaike information criterion (AIC), shown in the right plots, captures goodness of fit while accounting for model complexity (smaller AIC values correspond to better fits).
+The biexponential model fits the data best in the case of the news (AIC difference = 140), whereas the log-normal-inspired model fits the data best in the case of Twitter (AIC difference = 101).
+Note, however, that the log-normal-inspired model is the only one to have the undesirable property of being non-monotonic, unlike the empirical data and unlike what one would require from a theoretical model.
+When addressing this issue by constraining the log-normal-inspired model to be monotonically decreasing over the support range of the data (see plot labeled "Log-normal-inspired (constrained)"), the AIC is considerably larger than the AIC of the biexpoential model both in the news and on Twitter.
 
 
 # Mention time series characteristics
