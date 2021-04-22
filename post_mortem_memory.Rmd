@@ -922,7 +922,7 @@ plot_model_fit <- function(medium, name, model, predict, log='') {
 plot_all_model_fits <- function(medium) {
   models <- list("Biexponential"=biexp_fit(medium),
                  "Log-normal-inspired"=lognorm_fit(medium),
-                 "Log-normal-inspired\n(constrained)"=lognorm_constrained_fit(medium),
+                 "Log-normal-inspired\n(monotonic)"=lognorm_constrained_fit(medium),
                  "Power"=power_fit(medium),
                  "Logarithmic"=log_fit(medium),
                  "Hyperbolic"=hyperbolic_fit(medium),
@@ -1715,7 +1715,7 @@ The other functions are defined as follows:
 The Akaike information criterion (AIC), shown in the right plots, captures goodness of fit while accounting for model complexity (smaller AIC values correspond to better fits).
 The biexponential model fits the data best in the case of the news (AIC difference = 140), whereas the log-normal-inspired model fits the data best in the case of Twitter (AIC difference = 101).
 Note, however, that the log-normal-inspired model is the only one to have the undesirable property of being non-monotonic, unlike the empirical data and unlike what one would require from a theoretical model.
-When addressing this issue by constraining the log-normal-inspired model to be monotonically decreasing over the support range of the data (see plot labeled "Log-normal-inspired (constrained)"), the AIC is considerably larger than the AIC of the biexpoential model both in the news and on Twitter.
+When addressing this issue by constraining the log-normal-inspired model to be monotonically decreasing over the support range of the data (see plot labeled "Log-normal-inspired (monotonic)"), the AIC is considerably larger than the AIC of the biexpoential model both in the news and on Twitter.
 
 
 # Mention time series characteristics
