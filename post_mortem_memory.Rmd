@@ -777,6 +777,21 @@ exp_fit <- function(medium) {
   return(model)
 }
 
+exp_power_fit <- function(medium) {
+  df <- make_df_for_fit(medium)
+  # Start with a good guess.
+  # log(y) ~ log(a*exp(b*t^(-1))) = log(a)+b*t^(-1)
+  c0 <- -1
+  model0 <- lm(log(y) ~ I(t^c0), data=df)
+  log_a0 <- coef(model0)[1]
+  b0 <- coef(model0)[2]
+  model <- nls(log(y) ~ log_a + b*t^c,
+               start=list(log_a=log_a0, b=b0, c=c0),
+               data=df, control=list(maxiter=1e8), algorithm='port')
+  
+  return(model)
+}
+
 lognorm_fit <- function(medium) {
   df <- make_df_for_fit(medium)
   # log(y) ~ a + b*log(t) + c*log(t)^2
@@ -827,6 +842,22 @@ hyperbolic_fit <- function(medium) {
   model <- nls(log(y) ~ -log(a + b*t),
                start=list(a=a0, b=b0),
                data=df, control=list(maxiter=1e8), algorithm='port')
+  return(model)
+}
+
+hyperbolic_power_fit <- function(medium) {
+  df <- make_df_for_fit(medium)
+  # Start with a good guess.
+  # 1/y ~ a + b*t^c
+  c0 <- -7
+  model0 <- lm(1/y ~ I(t^c0), data=df)
+  a0 <- coef(model0)[1]
+  b0 <- coef(model0)[2]
+  # log(y) ~ -log(a + b*t^c)
+  model <- nls(log(y) ~ -log(a + b*t^c),
+               start=list(a=a0, b=b0, c=c0),
+               data=df, control=list(maxiter=1e9, warnOnly=TRUE), algorithm='port', trace=FALSE,
+               lower=c(a=0, b=-Inf, c=-Inf), upper=c(a=Inf, b=0, c=0))
   return(model)
 }
 
@@ -921,15 +952,16 @@ plot_model_fit <- function(medium, name, model, predict, log='') {
 
 plot_all_model_fits <- function(medium) {
   models <- list("Biexponential"=biexp_fit(medium),
-                 "Log-normal-inspired"=lognorm_fit(medium),
-                 "Log-normal-inspired\n(monotonic)"=lognorm_constrained_fit(medium),
+                 "Exponential-power"=exp_power_fit(medium),
+                 "Log-normal-inspired"=lognorm_constrained_fit(medium),
+                 "Hyperbolic-power"=hyperbolic_power_fit(medium),
                  "Power"=power_fit(medium),
                  "Logarithmic"=log_fit(medium),
                  "Hyperbolic"=hyperbolic_fit(medium),
                  "Exponential"=exp_fit(medium))
   if (SAVE_PLOTS) pdf(sprintf('%s/all_model_fits_%s.pdf', PLOTDIR, medium),
                       width=3.5, height=9, pointsize=8, family='Helvetica', useDingbats=FALSE)
-  par(mfcol=c(7,2))
+  par(mfcol=c(8,2))
   for (log in c('', 'x')) {
     for (name in names(models)) {
       model <- models[[name]]
@@ -1699,6 +1731,7 @@ plot_all_model_fits('NEWS')
 plot_all_model_fits('TWITTER')
 ```
 
+################################## TODO: update caption
 `r figcap(TRUE)`
 Comparison of six models $S(t)$ for fitting empirical mention frequencies.
 _Top (yellow):_ news.
