@@ -3,8 +3,8 @@ title: "Post-mortem memory of public figures in news and social media"
 author: "Robert West, Jure Leskovec, Christopher Potts"
 date: ""
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ```{r include=FALSE}
@@ -12,7 +12,7 @@ output:
 SAVE_PLOTS <- FALSE
 
 # Begin of nasty trick from here: https://stackoverflow.com/a/46686678
-SUPP_INFO <- FALSE
+SUPP_INFO <- TRUE
 INCLUDE_REGRESSION_IN_SUPP_INFO <- TRUE
 ```
 \newif\ifshowall
@@ -934,31 +934,37 @@ plot_model_fit <- function(medium, name, model, predict, log='') {
   } else {
     stop("medium must be NEWS or TWITTER!")
   }
-  max_day <- 400
-  t <- 1:max_day
-  eps <- min(x[x>0], na.rm=TRUE)
-  y <- colMeans(log10(x[,colnames(x) %in% t] + eps), na.rm=TRUE)
+  
+  df <- make_df_for_fit(medium)
+  t <- df$t
+  y <- log10(df$y)
+  yhat <- log10(predict)
+  
   par(mar=c(3,3,1,1))
-  plot(t, y, type='p', bty='n', lwd=2,
-       xlab='', ylab='',
-       col=COL[[medium]], las=0, log=log)
+  plot(t, y, type='p', bty='n', lwd=2, xlab='', ylab='', col=COL[[medium]], las=0, log=log)
   mtext('Days since death', side=1, line=2, cex=0.6)
   mtext('Mention frequency [log10]', side=2, line=2, cex=0.6)
-  lines(t, log10(predict), lwd=2)
+  lines(t, yhat, lwd=2)
 
-  if (log=='') text(200, max(y), name, adj=c(0.5,1), cex=1.7)
-  else text(400, max(y), sprintf('AIC = %.0f', AIC(model)), adj=c(1,1), cex=1)
+  aic <- AIC(model)
+  r2 <- cor(yhat, y)^2
+  if (log=='x') text(400, max(y),
+                      sprintf('R² = %.3f\nAIC = %.0f', r2, aic),
+                      adj=c(1,1), cex=1)
+  else text(200, max(y), name, adj=c(0.5,1), cex=1.7)
 }
 
 plot_all_model_fits <- function(medium) {
-  models <- list("Biexponential"=biexp_fit(medium),
-                 "Exponential-power"=exp_power_fit(medium),
-                 "Log-normal-inspired"=lognorm_constrained_fit(medium),
-                 "Hyperbolic-power"=hyperbolic_power_fit(medium),
-                 "Power"=power_fit(medium),
-                 "Logarithmic"=log_fit(medium),
+  models <- list(
+                 "Exponential"=exp_fit(medium),
                  "Hyperbolic"=hyperbolic_fit(medium),
-                 "Exponential"=exp_fit(medium))
+                 "Logarithmic"=log_fit(medium),
+                 "Power"=power_fit(medium),
+                 "Hyperbolic-power"=hyperbolic_power_fit(medium),
+                 "Log-normal-inspired"=lognorm_constrained_fit(medium),
+                 "Exponential-power"=exp_power_fit(medium),
+                 "Biexponential"=biexp_fit(medium)
+                 )
   if (SAVE_PLOTS) pdf(sprintf('%s/all_model_fits_%s.pdf', PLOTDIR, medium),
                       width=3.5, height=9, pointsize=8, family='Helvetica', useDingbats=FALSE)
   par(mfcol=c(8,2))
@@ -1206,7 +1212,31 @@ compound_se_for_lm <- function(mod, interact=NULL, base_age=NULL) {
     })
 }
 
-run_regression_analysis_for_death_types <- function(medium, lmdata) {
+run_regression_analysis <- function(medium, ranks) {
+  if (medium != 'NEWS' && medium != 'TWITTER') stop('Medium must be \'NEWS\' or \'TWITTER\'')
+  lmdata <- if (medium == 'NEWS') lmdata_N else lmdata_T
+  predictors <- 'mean_before_relrank + age_group + death_type + gender + anglo + type_group'
+  suffix <- if (ranks) '_relrank' else ''
+  mod_peak <- lm(as.formula(sprintf('peak_mean_boost%s ~ %s', suffix, predictors)), lmdata)
+  mod_perm <- lm(as.formula(sprintf(     'perm_boost%s ~ %s', suffix, predictors)), lmdata)
+
+  age_names <- sprintf("Age: %d--%d", seq(20,90,10)[-6], seq(29,99,10)[-6])
+  type_names <- levels(lmdata_N$type_group)[-1]
+  table <- texreg(list(mod_N_peak, mod_T_peak, mod_N_perm, mod_T_perm), dcolumn=TRUE, booktabs=TRUE,
+                  use.packages=FALSE, digits=3, leading.zero=FALSE, single.row=TRUE, stars = c(0.001,0.01,0.05),
+                  custom.model.names=c("\\shortstack{Short-term boost\\\\(News)}",
+                                       "\\shortstack{Short-term boost\\\\(Twitter)}",
+                                       "\\shortstack{Long-term boost\\\\(News)}",
+                                       "\\shortstack{Long-term boost\\\\(Twitter)}"),
+                  custom.coef.names=c("(Intercept)", "Pre-mortem mean (relative rank)", age_names, "Manner of death: unnatural",
+                                      "Gender: female", paste("Cultural background:", c("non-anglophone", "unknown")),
+                                      paste("Notability type:", type_names)),
+                  reorder.coef=c(1,2,10,12:13,11,14:18,3:9), table=FALSE)
+  cat(table, file=sprintf('%s/lm_coef_T_and_N%s.tex', TABLEDIR, suffix), sep="\n")
+  return(list(mod_peak=mod_peak, mod_perm=mod_perm))
+}
+
+run_regression_analysis_for_death_types <- function(medium, lmdata, ranks) {
   if (medium != 'NEWS' && medium != 'TWITTER') stop('Medium must be \'NEWS\' or \'TWITTER\'')
   lmdata <- if (medium == 'NEWS') lmdata_N else lmdata_T
   base_age <- levels(lmdata$age_group)[1]
@@ -1216,14 +1246,45 @@ run_regression_analysis_for_death_types <- function(medium, lmdata) {
   # intercept and include it instead as the coefficient of the base age).
   predictors <- '0 + mean_before_relrank + age_group + death_type + gender + anglo + type_group + age_group:death_type'
   interact <- sprintf('death_type%s', if (base_death_type=='natural') 'unnatural' else 'natural')
-  mod_peak <- lm(as.formula(sprintf('peak_mean_boost_relrank ~ %s', predictors)), lmdata)
-  mod_perm <- lm(as.formula(sprintf(     'perm_boost_relrank ~ %s', predictors)), lmdata)
+  suffix <- if (ranks) '_relrank' else ''
+  mod_peak <- lm(as.formula(sprintf('peak_mean_boost%s ~ %s', suffix, predictors)), lmdata)
+  mod_perm <- lm(as.formula(sprintf(     'perm_boost%s ~ %s', suffix, predictors)), lmdata)
   # These plots show the mean relative rank (w.r.t. output measure) as a function of age,
   # for a male anglo artist of median pre-mortem popularity.
-  ylim <- c(-0.3,0.6)
-  plot_age_coeffs_for_death_types(mod_peak, medium, 'peak_mean_boost', base_age, ylim)
-  plot_age_coeffs_for_death_types(mod_perm, medium, 'perm_boost', base_age, ylim)
+  plot_age_coeffs_for_death_types(mod_peak, medium, 'peak_mean_boost', base_age,
+                                  if (ranks) c(-0.3,0.6) else c(1.8,4.2))
+  plot_age_coeffs_for_death_types(mod_perm, medium, 'perm_boost', base_age,
+                                  if (ranks) c(-0.3,0.6) else c(-0.1,0.6))
 
+  return(list(mod_peak=mod_peak, mod_perm=mod_perm))
+}
+
+run_regression_analysis_T_vs_N <- function(ranks) {
+  lmdata <- lmdata_N
+  lmdata$mean_before_relrank_diff     <- lmdata_N$mean_before_relrank - lmdata_T$mean_before_relrank
+
+  lmdata$peak_mean_boost_diff         <- lmdata_N$peak_mean_boost - lmdata_T$peak_mean_boost
+  lmdata$perm_boost_diff              <- lmdata_N$perm_boost - lmdata_T$perm_boost
+  lmdata$peak_mean_boost_relrank_diff <- lmdata_N$peak_mean_boost_relrank - lmdata_T$peak_mean_boost_relrank
+  lmdata$perm_boost_relrank_diff      <- lmdata_N$perm_boost_relrank - lmdata_T$perm_boost_relrank
+
+  predictors <- 'mean_before_relrank_diff + age_group + death_type + gender + anglo + type_group'
+  suffix <- if (ranks) '_relrank' else ''
+  mod_peak <- lm(as.formula(sprintf('peak_mean_boost%s_diff ~ %s', suffix, predictors)), lmdata)
+  mod_perm <- lm(as.formula(sprintf('perm_boost%s_diff ~ %s', suffix, predictors)), lmdata)
+  
+  age_names <- sprintf("Age: %d--%d", seq(20,90,10)[-6], seq(29,99,10)[-6])
+  type_names <- levels(lmdata_N$type_group)[-1]
+  table <- texreg(list(mod_peak, mod_perm), dcolumn=TRUE, booktabs=TRUE,
+                  use.packages=FALSE, digits=3, leading.zero=FALSE, single.row=TRUE, stars = c(0.001,0.01,0.05),
+                  label = "table:coefficients News vs. Twitter", custom.model.names=c("Short-term boost", "Long-term boost"),
+                  custom.coef.names=c("(Intercept)", "Pre-mortem mean (relative-rank diff.)", age_names,
+                                      "Manner of death: unnatural",
+                                      "Gender: female", paste("Cultural background:", c("non-anglophone", "unknown")),
+                                      paste("Notability type:", type_names)),
+                  reorder.coef=c(1,2,10,12:13,11,14:18,3:9), table=FALSE)
+  
+  cat(table, file=sprintf('%s/lm_coef_T_vs_N%s.tex', TABLEDIR, suffix), sep="\n")
   return(list(mod_peak=mod_peak, mod_perm=mod_perm))
 }
 
@@ -1723,32 +1784,56 @@ _Left:_ news. _Right:_ Twitter.
 
 # Alternative models
 
-```{r alternative_models_N, fig.width=5, fig.height=11, echo=!SUPP_INFO}
+__(a) News__
+```{r alternative_models_N, fig.width=5, fig.height=10, echo=!SUPP_INFO}
 plot_all_model_fits('NEWS')
 ```
 
-```{r alternative_models_T, fig.width=5, fig.height=11, echo=!SUPP_INFO}
+__(b) Twitter__
+```{r alternative_models_T, fig.width=5, fig.height=10, echo=!SUPP_INFO, warning=!SUPP_INFO}
 plot_all_model_fits('TWITTER')
 ```
 
-################################## TODO: update caption
 `r figcap(TRUE)`
-Comparison of six models $S(t)$ for fitting empirical mention frequencies.
-_Top (yellow):_ news.
-_Bottom (blue):_ Twitter.
+Comparison of eight models $S(t)$ for fitting empirical mention frequencies, for __(a)__ the news and __(b)__ Twitter.
+All $y$-axes are logarithmic.
 The left and right plots in each row show the same fits, the only difference being that the left plots have linear $x$-axes, whereas the right plots have logarithmic $x$-axes.
-Fits are nonlinear least-squares fits obtained in log space, i.e., logarithms were taken of both the data and the model $S(t)$ before performing the least-squares optimization (see equation (5) in the paper for the case of the biexponential model).
-The biexponential function is defined in equation (4) of the paper.
-The other functions are defined as follows:
-*Log-normal-inspired:* $S(t) = \exp(a' - b \log t + c (\log t)^2) = a \, t^{-b + c\log t}$. (We call this function "log-normal-inspired" because it takes the functional form of the log-normal distribution, but is not a probability distribution.)
-*Power:* $S(t) = a \, t^{-b}$.
-*Logarithmic:* $S(t) = a - b \log t$.
-*Hyperbolic:* $S(t) = (a + bt)^{-1}$.
-*Exponential:* $S(t) = a \, e^{-bt}$.
-The Akaike information criterion (AIC), shown in the right plots, captures goodness of fit while accounting for model complexity (smaller AIC values correspond to better fits).
-The biexponential model fits the data best in the case of the news (AIC difference = 140), whereas the log-normal-inspired model fits the data best in the case of Twitter (AIC difference = 101).
-Note, however, that the log-normal-inspired model is the only one to have the undesirable property of being non-monotonic, unlike the empirical data and unlike what one would require from a theoretical model.
-When addressing this issue by constraining the log-normal-inspired model to be monotonically decreasing over the support range of the data (see plot labeled "Log-normal-inspired (monotonic)"), the AIC is considerably larger than the AIC of the biexpoential model both in the news and on Twitter.
+Fits are nonlinear least-squares fits obtained in log space, i.e., logarithms were taken of both the empirical data and the model $S(t)$ before performing the least-squares optimization (see equation (5) in the paper for the case of the biexponential model).
+The biexponential function was introduced by Candia et al. ("The universal decay of collective memory and attention." _Nature Human Behaviour_. 2019; 3(1):82-91) and is defined in equation (4) of the paper.
+Theoretical motivations for six of the seven remaining functions are given by Rubin and Wenzel ("One hundred years of forgetting: A quantitative description of retention." _Psychological Review_. 1996; 103(4):734-760).
+Four of these functions are parameterized by two parameters $a,b>0$, as follows:
+
+* Exponential: $S(t) = a \, e^{-bt}$, i.e., $\log S(t) = \log a - b e^{\log t}$.
+* Hyperbolic: $S(t) = (a + bt)^{-1}$, i.e., $\log S(t) = -\log(a + b e^{\log t})$.
+* Logarithmic: $S(t) = a - b \log t$, i.e., $\log S(t) = \log(a - b \log t)$.
+* Power: $S(t) = a \, t^{-b}$, i.e., $\log S(t) = \log a - b \log t$.
+
+The four above functions share the shortcoming of being concave (at best linear, in the case of the power function) when plotted on log-log axes (i.e., $\log S(t)$ is a concave function of $\log t$, cf. right columns), whereas the empirical curves are convex on log-log axes.
+
+Rubin and Wenzel also proposed generalized versions of the hyperbolic and exponential functions, called hyperbolic-power and exponential-power functions, respectively, where $t$ is replaced by the power $t^c$, where $c$ is a third parameter.
+(Analogous generalized versions of the logarithmic and power functions are not necessary, as they can already be expressed by the plain logarithmic and power functions, since $b \log t^c = (bc) \log t$.)
+For $c>0$, the hyperbolic-power and exponential-power functions, too, are concave in log-log space, but when allowing for $b,c < 0$, they can be made convex and are thus better suited for fitting the empirical data (note that, in the following specifications, we maintain $a,b,c > 0$, but replace $b$ by $-b$, and $c$ by $-c$):
+
+* Exponential-power: $S(t) = a \, e^{bt^{-c}}$, i.e., $\log S(t) = \log a + b e^{-c \log t}$.
+* Hyperbolic-power: $S(t) = (a - bt^{-c})^{-1}$, i.e., $\log S(t) = -\log (a - be^{-c \log t})$.
+
+Finally, as the seventh function, we consider what Candia et al. refer to as the "log-normal" function, defined as
+$S(t) = \exp(\log a - b \log t - c (\log t)^2)$.
+To recognize the fact that, although this function takes the functional form of the log-normal distribution, it is not actually used to fit a probability distribution here, we refer to the function as "log-normal-inspired".
+The log-normal-inspired function, too, is concave in log-log space, but can be made convex by replacing $c$ by $-c$, i.e.,
+$S(t) = \exp(\log a - b \log t + c (\log t)^2)$.
+Note, however, that this results in $S(t)$ being an increasing function of $t$ as $t \rightarrow \infty$, unlike the empirical data and unlike what one would require from a sound theoretical model of collective memory.
+We hence constrain the parameters such that the fitted function is monotonically decreasing over the modeled time range (days 1 to $t_{\max}=400$).
+Since the unconstrained function, when fitted to the empirical data, assumes a minimum at $1<t<t_{\max}$, the monotonicity constraint is equivalent to requiring the minimum to occur at $t=t_{\max}$, which happens for $b=-2ct_{\max}$ and gives rise to the following model:
+
+* Log-normal-inspired: $S(t) = \exp(\log a + c ((\log t)^2 - 2t_{\max}\log t))$, i.e., $\log S(t) = \log a + c ((\log t)^2 - 2t_{\max}\log t)$.
+
+We quantify goodness of fit using two measures (results in the legends of the right plots):
+(1) via coefficients of determination ($R^2$; computed as the squared correlation between observed and predicted values on the log scale; larger is better);
+(2) in order to account for the varying model complexity (the models have between two and four parameters), via Akaike's information criterion (AIC; smaller is better).
+$R^2$ and AIC result in the same ordering of the eight models, and the ordering is identical across the two media (news and Twitter).
+In the figure, the models are sorted, top-down, in increasing order of goodness of fit.
+The biexponential model provides the best fit according to both measures ($R^2$ and AIC) and for both media (news and Twitter).
 
 
 # Mention time series characteristics
@@ -1971,25 +2056,13 @@ Dependendent variables:
 ## Models without interactions
 
 ```{r run regressions, echo=!SUPP_INFO}
-predictors <- 'mean_before_relrank + age_group + death_type + gender + anglo + type_group'
-mod_N_peak <- lm(as.formula(sprintf('peak_mean_boost_relrank ~ %s', predictors)), lmdata_N)
-mod_T_peak <- lm(as.formula(sprintf('peak_mean_boost_relrank ~ %s', predictors)), lmdata_T)
-mod_N_perm <- lm(as.formula(sprintf('     perm_boost_relrank ~ %s', predictors)), lmdata_N)
-mod_T_perm <- lm(as.formula(sprintf('     perm_boost_relrank ~ %s', predictors)), lmdata_T)
+mods_N <- run_regression_analysis('NEWS', ranks=FALSE)
+mods_T <- run_regression_analysis('TWITTER', ranks=FALSE)
 
-age_names <- sprintf("Age: %d--%d", seq(20,90,10)[-6], seq(29,99,10)[-6])
-type_names <- levels(lmdata_N$type_group)[-1]
-table <- texreg(list(mod_N_peak, mod_T_peak, mod_N_perm, mod_T_perm), dcolumn=TRUE, booktabs=TRUE,
-                use.packages=FALSE, digits=3, leading.zero=FALSE, single.row=TRUE, stars = c(0.001,0.01,0.05),
-                custom.model.names=c("\\shortstack{Short-term boost\\\\(News)}",
-                                     "\\shortstack{Short-term boost\\\\(Twitter)}",
-                                     "\\shortstack{Long-term boost\\\\(News)}",
-                                     "\\shortstack{Long-term boost\\\\(Twitter)}"),
-                custom.coef.names=c("(Intercept)", "Pre-mortem mean (relative rank)", age_names, "Manner of death: unnatural",
-                                    "Gender: female", paste("Cultural background:", c("non-anglophone", "unknown")),
-                                    paste("Notability type:", type_names)),
-                reorder.coef=c(1,2,10,12:13,11,14:18,3:9), table=FALSE)
-cat(table, file=sprintf('%s/lm_coef_T_and_N.tex', TABLEDIR), sep="\n")
+mod_peak_N <- mods_N$mod_peak
+mod_perm_N <- mods_N$mod_perm
+mod_peak_T <- mods_T$mod_peak
+mod_perm_T <- mods_T$mod_perm
 
 print(summary(mod_N_peak))
 ```
@@ -2025,8 +2098,8 @@ Linear regression model of long-term boost on Twitter.
 
 ```{r run regression models with interactions, fig.width=10, fig.height=6, echo=if (!SUPP_INFO) -1 else FALSE}
 par(mfrow=c(2,2))
-mods_N <- run_regression_analysis_for_death_types('NEWS')
-mods_T <- run_regression_analysis_for_death_types('TWITTER')
+mods_N <- run_regression_analysis_for_death_types('NEWS', ranks=FALSE)
+mods_T <- run_regression_analysis_for_death_types('TWITTER', ranks=FALSE)
 ```
 `r figcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
 Dependence of post-mortem mention frequency on age at death for news (top) and Twitter (bottom).
@@ -2074,32 +2147,9 @@ Linear regression model of long-term boost on Twitter, with added "age by manner
 ## Models of news-vs.-Twitter boost difference for fixed person (without interactions)
 
 ```{r regression analysis NEWS vs. TWITTER, fig.width=5, fig.height=3, echo=!SUPP_INFO}
-lmdata <- lmdata_N
-lmdata$mean_before_relrank_N <- lmdata_N$mean_before_relrank
-lmdata$mean_before_relrank_T <- lmdata_T$mean_before_relrank
-lmdata$mean_before_relrank_diff <- lmdata$mean_before_relrank_N - lmdata$mean_before_relrank_T
-lmdata$peak_mean_boost_relrank_N <- lmdata_N$peak_mean_boost_relrank
-lmdata$peak_mean_boost_relrank_T <- lmdata_T$peak_mean_boost_relrank
-lmdata$peak_mean_boost_relrank_diff <- lmdata$peak_mean_boost_relrank_N - lmdata$peak_mean_boost_relrank_T
-lmdata$perm_boost_relrank_N <- lmdata_N$perm_boost_relrank
-lmdata$perm_boost_relrank_T <- lmdata_T$perm_boost_relrank
-lmdata$perm_boost_relrank_diff <- lmdata$perm_boost_relrank_N - lmdata$perm_boost_relrank_T
-
-predictors <- 'mean_before_relrank_diff + age_group + death_type + gender + anglo + type_group'
-mod_peak <- lm(as.formula(sprintf('peak_mean_boost_relrank_diff ~ %s', predictors)), lmdata)
-mod_perm <- lm(as.formula(sprintf('perm_boost_relrank_diff ~ %s', predictors)), lmdata)
-
-age_names <- sprintf("Age: %d--%d", seq(20,90,10)[-6], seq(29,99,10)[-6])
-type_names <- levels(lmdata_N$type_group)[-1]
-table <- texreg(list(mod_peak, mod_perm), dcolumn=TRUE, booktabs=TRUE,
-                use.packages=FALSE, digits=3, leading.zero=FALSE, single.row=TRUE, stars = c(0.001,0.01,0.05),
-                label = "table:coefficients News vs. Twitter", custom.model.names=c("Short-term boost", "Long-term boost"),
-                custom.coef.names=c("(Intercept)", "Pre-mortem mean (relative-rank diff.)", age_names,
-                                    "Manner of death: unnatural",
-                                    "Gender: female", paste("Cultural background:", c("non-anglophone", "unknown")),
-                                    paste("Notability type:", type_names)),
-                reorder.coef=c(1,2,10,12:13,11,14:18,3:9), table=FALSE)
-cat(table, file=sprintf('%s/lm_coef_T_vs_N.tex', TABLEDIR), sep="\n")
+mods <- run_regression_analysis_T_vs_N(ranks=FALSE)
+mod_peak <- mods$mod_peak
+mod_perm <- mods$mod_perm
 
 print(summary(mod_peak))
 ```
@@ -2121,6 +2171,7 @@ predictors <- '0 + mean_before_relrank_diff + age_group + death_type + gender + 
 mod_peak <- lm(as.formula(sprintf('peak_mean_boost_relrank_diff ~ %s', predictors)), lmdata)
 mod_perm <- lm(as.formula(sprintf('perm_boost_relrank_diff ~ %s', predictors)), lmdata)
 ylim <- c(-0.45, 0.45)
+ylim <- c(-1, 0.45)
 par(mfrow=c(1,2))
 plot_age_coeffs_for_death_types(mod_peak, NA, 'peak_mean_boost_diff', 70, ylim, 'black')
 plot_age_coeffs_for_death_types(mod_perm, NA, 'perm_boost_diff', 70, ylim, 'black')
