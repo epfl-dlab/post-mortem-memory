@@ -3,16 +3,16 @@ title: "Post-mortem memory of public figures in news and social media"
 author: "Robert West, Jure Leskovec, Christopher Potts"
 date: ""
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r include=FALSE}
 # Set this to FALSE if you don't want to save plots to PDFs.
-SAVE_PLOTS <- FALSE
+SAVE_PLOTS <- TRUE
 
 # Begin of nasty trick from here: https://stackoverflow.com/a/46686678
-SUPP_INFO <- TRUE
+SUPP_INFO <- FALSE
 INCLUDE_REGRESSION_IN_SUPP_INFO <- TRUE
 ```
 \newif\ifshowall
@@ -1199,6 +1199,16 @@ make_regression_data <- function(medium) {
   return(data)
 }
 
+make_regression_data_T_vs_N <- function() {
+  lmdata <- make_regression_data('NEWS')
+  lmdata$mean_before_relrank_diff     <- lmdata_N$mean_before_relrank - lmdata_T$mean_before_relrank
+  lmdata$peak_mean_boost_diff         <- lmdata_N$peak_mean_boost - lmdata_T$peak_mean_boost
+  lmdata$perm_boost_diff              <- lmdata_N$perm_boost - lmdata_T$perm_boost
+  lmdata$peak_mean_boost_relrank_diff <- lmdata_N$peak_mean_boost_relrank - lmdata_T$peak_mean_boost_relrank
+  lmdata$perm_boost_relrank_diff      <- lmdata_N$perm_boost_relrank - lmdata_T$perm_boost_relrank
+  return(lmdata)
+}
+
 # The real uncertainty in the summed coefficients is larger; need to add separate SEs and entries of vcov
 # matrix: https://biologyforfun.wordpress.com/2017/05/17/adding-standard-errors-for-interaction-terms/comment-page-1/
 compound_se_for_lm <- function(mod, interact=NULL, base_age=NULL) {
@@ -1219,29 +1229,13 @@ run_regression_analysis <- function(medium, ranks) {
   suffix <- if (ranks) '_relrank' else ''
   mod_peak <- lm(as.formula(sprintf('peak_mean_boost%s ~ %s', suffix, predictors)), lmdata)
   mod_perm <- lm(as.formula(sprintf(     'perm_boost%s ~ %s', suffix, predictors)), lmdata)
-
-  age_names <- sprintf("Age: %d--%d", seq(20,90,10)[-6], seq(29,99,10)[-6])
-  type_names <- levels(lmdata_N$type_group)[-1]
-  table <- texreg(list(mod_N_peak, mod_T_peak, mod_N_perm, mod_T_perm), dcolumn=TRUE, booktabs=TRUE,
-                  use.packages=FALSE, digits=3, leading.zero=FALSE, single.row=TRUE, stars = c(0.001,0.01,0.05),
-                  custom.model.names=c("\\shortstack{Short-term boost\\\\(News)}",
-                                       "\\shortstack{Short-term boost\\\\(Twitter)}",
-                                       "\\shortstack{Long-term boost\\\\(News)}",
-                                       "\\shortstack{Long-term boost\\\\(Twitter)}"),
-                  custom.coef.names=c("(Intercept)", "Pre-mortem mean (relative rank)", age_names, "Manner of death: unnatural",
-                                      "Gender: female", paste("Cultural background:", c("non-anglophone", "unknown")),
-                                      paste("Notability type:", type_names)),
-                  reorder.coef=c(1,2,10,12:13,11,14:18,3:9), table=FALSE)
-  cat(table, file=sprintf('%s/lm_coef_T_and_N%s.tex', TABLEDIR, suffix), sep="\n")
   return(list(mod_peak=mod_peak, mod_perm=mod_perm))
 }
 
-run_regression_analysis_for_death_types <- function(medium, lmdata, ranks) {
+run_regression_analysis_for_death_types <- function(medium, ranks) {
   if (medium != 'NEWS' && medium != 'TWITTER') stop('Medium must be \'NEWS\' or \'TWITTER\'')
   lmdata <- if (medium == 'NEWS') lmdata_N else lmdata_T
-  base_age <- levels(lmdata$age_group)[1]
   base_death_type <- levels(lmdata$death_type)[1]
-  
   # Compare natural vs. unnatural death for the different age brackets (0 to omit the
   # intercept and include it instead as the coefficient of the base age).
   predictors <- '0 + mean_before_relrank + age_group + death_type + gender + anglo + type_group + age_group:death_type'
@@ -1249,46 +1243,29 @@ run_regression_analysis_for_death_types <- function(medium, lmdata, ranks) {
   suffix <- if (ranks) '_relrank' else ''
   mod_peak <- lm(as.formula(sprintf('peak_mean_boost%s ~ %s', suffix, predictors)), lmdata)
   mod_perm <- lm(as.formula(sprintf(     'perm_boost%s ~ %s', suffix, predictors)), lmdata)
-  # These plots show the mean relative rank (w.r.t. output measure) as a function of age,
-  # for a male anglo artist of median pre-mortem popularity.
-  plot_age_coeffs_for_death_types(mod_peak, medium, 'peak_mean_boost', base_age,
-                                  if (ranks) c(-0.3,0.6) else c(1.8,4.2))
-  plot_age_coeffs_for_death_types(mod_perm, medium, 'perm_boost', base_age,
-                                  if (ranks) c(-0.3,0.6) else c(-0.1,0.6))
-
   return(list(mod_peak=mod_peak, mod_perm=mod_perm))
 }
 
 run_regression_analysis_T_vs_N <- function(ranks) {
-  lmdata <- lmdata_N
-  lmdata$mean_before_relrank_diff     <- lmdata_N$mean_before_relrank - lmdata_T$mean_before_relrank
-
-  lmdata$peak_mean_boost_diff         <- lmdata_N$peak_mean_boost - lmdata_T$peak_mean_boost
-  lmdata$perm_boost_diff              <- lmdata_N$perm_boost - lmdata_T$perm_boost
-  lmdata$peak_mean_boost_relrank_diff <- lmdata_N$peak_mean_boost_relrank - lmdata_T$peak_mean_boost_relrank
-  lmdata$perm_boost_relrank_diff      <- lmdata_N$perm_boost_relrank - lmdata_T$perm_boost_relrank
-
+  lmdata <- make_regression_data_T_vs_N()
   predictors <- 'mean_before_relrank_diff + age_group + death_type + gender + anglo + type_group'
   suffix <- if (ranks) '_relrank' else ''
   mod_peak <- lm(as.formula(sprintf('peak_mean_boost%s_diff ~ %s', suffix, predictors)), lmdata)
   mod_perm <- lm(as.formula(sprintf('perm_boost%s_diff ~ %s', suffix, predictors)), lmdata)
-  
-  age_names <- sprintf("Age: %d--%d", seq(20,90,10)[-6], seq(29,99,10)[-6])
-  type_names <- levels(lmdata_N$type_group)[-1]
-  table <- texreg(list(mod_peak, mod_perm), dcolumn=TRUE, booktabs=TRUE,
-                  use.packages=FALSE, digits=3, leading.zero=FALSE, single.row=TRUE, stars = c(0.001,0.01,0.05),
-                  label = "table:coefficients News vs. Twitter", custom.model.names=c("Short-term boost", "Long-term boost"),
-                  custom.coef.names=c("(Intercept)", "Pre-mortem mean (relative-rank diff.)", age_names,
-                                      "Manner of death: unnatural",
-                                      "Gender: female", paste("Cultural background:", c("non-anglophone", "unknown")),
-                                      paste("Notability type:", type_names)),
-                  reorder.coef=c(1,2,10,12:13,11,14:18,3:9), table=FALSE)
-  
-  cat(table, file=sprintf('%s/lm_coef_T_vs_N%s.tex', TABLEDIR, suffix), sep="\n")
   return(list(mod_peak=mod_peak, mod_perm=mod_perm))
 }
 
-plot_age_coeffs_for_death_types <- function(mod, medium, outcome, base_age, ylim=NULL, col=COL[[medium]]) {
+run_regression_analysis_T_vs_N_for_death_types <- function(ranks) {
+  lmdata <- make_regression_data_T_vs_N()
+  predictors <- '0 + mean_before_relrank_diff + age_group + death_type + gender + anglo + type_group + age_group:death_type'
+  suffix <- if (ranks) '_relrank' else ''
+  mod_peak <- lm(as.formula(sprintf('peak_mean_boost%s_diff ~ %s', suffix, predictors)), lmdata)
+  mod_perm <- lm(as.formula(sprintf('perm_boost%s_diff ~ %s', suffix, predictors)), lmdata)
+  return(list(mod_peak=mod_peak, mod_perm=mod_perm))
+}
+
+plot_age_coeffs_for_death_types <- function(mod, medium, outcome, base_age, ranks,
+                                            ylim=NULL, col=COL[[medium]]) {
   summary <- coef(summary(mod))
 
   # Non-interaction terms (i.e., natural death).
@@ -1314,18 +1291,23 @@ plot_age_coeffs_for_death_types <- function(mod, medium, outcome, base_age, ylim
                                      age_coef_unnatural - 2*se_unnatural,
                                      age_coef_unnatural + 2*se_unnatural), na.rm=TRUE)
   col_unnat <- 'gray'
+  suffix <- if (ranks) '_relrank' else ''
   if (outcome == 'peak_mean_boost') {
     main <- sprintf('Short-term boost', medium)
-    outfile <- sprintf('%s/age_coefs_%s_%s.pdf', PLOTDIR, medium, outcome)
+    xlab <- 'Average boost'
+    outfile <- sprintf('%s/age_coefs_%s_%s%s.pdf', PLOTDIR, medium, outcome, suffix)
   } else if (outcome == 'perm_boost') {
     main <- sprintf('Long-term boost', medium)
-    outfile <- sprintf('%s/age_coefs_%s_%s.pdf', PLOTDIR, medium, outcome)
+    xlab <- 'Average boost'
+    outfile <- sprintf('%s/age_coefs_%s_%s%s.pdf', PLOTDIR, medium, outcome, suffix)
   } else if (outcome == 'peak_mean_boost_diff') {
     main <- 'Short-term boost'
-    outfile <- sprintf('%s/age_coefs_NEWS-VS_TWITTER_%s.pdf', PLOTDIR, outcome)
+    xlab <- 'Average boost difference'
+    outfile <- sprintf('%s/age_coefs_NEWS-VS_TWITTER_%s%s.pdf', PLOTDIR, outcome, suffix)
   } else if (outcome == 'perm_boost_diff') {
     main <- 'Long-term boost'
-    outfile <- sprintf('%s/age_coefs_NEWS-VS_TWITTER_%s.pdf', PLOTDIR, outcome)
+    xlab <- 'Average boost difference'
+    outfile <- sprintf('%s/age_coefs_NEWS-VS_TWITTER_%s%s.pdf', PLOTDIR, outcome, suffix)
   } else {
     stop('Illegal outcome name')
   }
@@ -1339,11 +1321,50 @@ plot_age_coeffs_for_death_types <- function(mod, medium, outcome, base_age, ylim
   axis(1, at=c(decades, max(decades)+10), line=0)
   axis(2, line=0)
   mtext('Age at death', 1, line=2)
-  mtext('Effect size', 2, line=2)
+  mtext(xlab, 2, line=2)
   points(decades+4, age_coef_natural, type='b', lwd=2, col=col)
   dispersion(decades+4, age_coef_natural, 2*se_natural, col=col, arrow.cap=0.005)
   legend('bottomleft', c('Natural death', 'Unnatural death'), col=c(col, col_unnat), lty=1, lwd=2, horiz=TRUE, bty='n')
   if (SAVE_PLOTS) dev.off()
+}
+
+print_regression_table <- function(mods_N, mods_T, ranks) {
+  age_names <- sprintf("Age: %d--%d", seq(20,90,10)[-6], seq(29,99,10)[-6])
+  type_names <- levels(lmdata_N$type_group)[-1]
+  table <- texreg(list(mods_N$mod_peak, mods_T$mod_peak, mods_N$mod_perm, mods_T$mod_perm), dcolumn=TRUE, booktabs=TRUE,
+                  use.packages=FALSE, digits=3, leading.zero=FALSE, single.row=TRUE, stars = c(0.001,0.01,0.05),
+                  custom.model.names=c("\\shortstack{Short-term boost\\\\(News)}",
+                                       "\\shortstack{Short-term boost\\\\(Twitter)}",
+                                       "\\shortstack{Long-term boost\\\\(News)}",
+                                       "\\shortstack{Long-term boost\\\\(Twitter)}"),
+                  custom.coef.names=c("(Intercept)", "Pre-mortem mean (relative rank)", age_names, "Manner of death: unnatural",
+                                      "Gender: female", paste("Cultural background:", c("non-anglophone", "unknown")),
+                                      paste("Notability type:", type_names)),
+                  reorder.coef=c(1,2,10,12:13,11,14:18,3:9), table=FALSE)
+  cat(table, file=sprintf('%s/lm_coef_T_and_N%s.tex', TABLEDIR, if (ranks) '_relrank' else ''), sep="\n")
+}
+
+print_regression_table_T_vs_N <- function(mods, ranks) {
+  age_names <- sprintf("Age: %d--%d", seq(20,90,10)[-6], seq(29,99,10)[-6])
+  type_names <- levels(lmdata_N$type_group)[-1]
+  table <- texreg(list(mods$mod_peak, mods$mod_perm), dcolumn=TRUE, booktabs=TRUE,
+                  use.packages=FALSE, digits=3, leading.zero=FALSE, single.row=TRUE, stars = c(0.001,0.01,0.05),
+                  label = "table:coefficients News vs. Twitter", custom.model.names=c("Short-term boost", "Long-term boost"),
+                  custom.coef.names=c("(Intercept)", "Pre-mortem mean (relative-rank diff.)", age_names,
+                                      "Manner of death: unnatural",
+                                      "Gender: female", paste("Cultural background:", c("non-anglophone", "unknown")),
+                                      paste("Notability type:", type_names)),
+                  reorder.coef=c(1,2,10,12:13,11,14:18,3:9), table=FALSE)
+  cat(table, file=sprintf('%s/lm_coef_T_vs_N%s.tex', TABLEDIR, if (ranks) '_relrank' else ''), sep="\n")
+}
+
+print_model_description <- function(medium, depvar, ranks) {
+  cat('\n\n#####################################################\n')
+  cat('REGRESSION MODEL\n')
+  cat(sprintf('Medium: %s\n', medium))
+  cat(sprintf('Dependent variable: %s\n', depvar))
+  cat(sprintf('Transformation on dependent variable: %s\n', if (ranks) 'RELATIVE RANKS' else 'NONE'))
+  cat('#####################################################\n')
 }
 
 draw_mega_figure <- function() {
@@ -1511,6 +1532,8 @@ stats_T <- load_stats('TWITTER', x_T, X_T, num_art_T)
 
 lmdata_N <- make_regression_data('NEWS')
 lmdata_T <- make_regression_data('TWITTER')
+
+BASE_AGE <- levels(lmdata_N$age_group)[1]
 
 # stats_N and stats_T contain the same people, so we arbitrarily use stats_N here.
 natural <- which(stats_N$natural_death == 1)
@@ -2056,145 +2079,84 @@ Dependendent variables:
 ## Models without interactions
 
 ```{r run regressions, echo=!SUPP_INFO}
-mods_N <- run_regression_analysis('NEWS', ranks=FALSE)
-mods_T <- run_regression_analysis('TWITTER', ranks=FALSE)
-
-mod_peak_N <- mods_N$mod_peak
-mod_perm_N <- mods_N$mod_perm
-mod_peak_T <- mods_T$mod_peak
-mod_perm_T <- mods_T$mod_perm
-
-print(summary(mod_N_peak))
+for (ranks in c(FALSE, TRUE)) {
+  mods_N <- run_regression_analysis('NEWS', ranks)
+  mods_T <- run_regression_analysis('TWITTER', ranks)
+  
+  print_regression_table(mods_N, mods_T, ranks)
+  
+  print_model_description('NEWS', 'short-term boost', ranks)
+  print(summary(mods_N$mod_peak))
+  
+  print_model_description('NEWS', 'long-term boost', ranks)
+  print(summary(mods_N$mod_perm))
+  
+  print_model_description('TWITTER', 'short-term boost', ranks)
+  print(summary(mods_T$mod_peak))
+  
+  print_model_description('TWITTER', 'long-term boost', ranks)
+  print(summary(mods_T$mod_perm))
+}
 ```
-`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
-Linear regression model of short-term boost in the news.
-
-`r vertskip`
-
-```{r print regression tables N long, fig.width=12, fig.height=8, echo=!SUPP_INFO}
-print(summary(mod_N_perm))
-```
-`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
-Linear regression model of long-term boost in the news.
-
-`r vertskip`
-
-```{r print regression tables T short, fig.width=12, fig.height=8, echo=!SUPP_INFO}
-print(summary(mod_T_peak))
-```
-`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
-Linear regression model of short-term boost on Twitter.
-
-`r vertskip`
-
-```{r print regression tables T long, fig.width=12, fig.height=8, echo=!SUPP_INFO}
-print(summary(mod_T_perm))
-```
-`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
-Linear regression model of long-term boost on Twitter.
-
 
 ## Models with "age by manner of death" interaction
 
-```{r run regression models with interactions, fig.width=10, fig.height=6, echo=if (!SUPP_INFO) -1 else FALSE}
-par(mfrow=c(2,2))
-mods_N <- run_regression_analysis_for_death_types('NEWS', ranks=FALSE)
-mods_T <- run_regression_analysis_for_death_types('TWITTER', ranks=FALSE)
+```{r run regression models with interactions, fig.width=10, fig.height=3, echo=if (!SUPP_INFO) -1 else FALSE}
+for (ranks in c(FALSE, TRUE)) {
+  for (medium in c('NEWS', 'TWITTER')) {
+    mods <- run_regression_analysis_for_death_types(medium, ranks)
+    # Short-term.
+    print_model_description(medium, 'short-term boost', ranks)
+    print(summary(mods$mod_peak))
+    # Long-term.
+    print_model_description(medium, 'long-term boost', ranks)
+    print(summary(mods$mod_perm))
+    # Plots.
+    par(mfrow=c(1,2))
+    plot_age_coeffs_for_death_types(mods$mod_peak, medium, 'peak_mean_boost', BASE_AGE, ranks,
+                                    if (ranks) c(-0.3,0.6) else c(1.8,4.2))
+    plot_age_coeffs_for_death_types(mods$mod_perm, medium, 'perm_boost', BASE_AGE, ranks,
+                                    if (ranks) c(-0.3,0.6) else c(-0.1,0.6))
+  }
+}
 ```
-`r figcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
-Dependence of post-mortem mention frequency on age at death for news (top) and Twitter (bottom).
-
-`r vertskip`
-
-```{r, echo=!SUPP_INFO}
-mod_peak_N <- mods_N$mod_peak
-mod_perm_N <- mods_N$mod_perm
-mod_peak_T <- mods_T$mod_peak
-mod_perm_T <- mods_T$mod_perm
-```
-
-```{r, echo=!SUPP_INFO}
-print(summary(mod_peak_N))
-```
-`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
-Linear regression model of short-term boost in the news, with added "age by manner of death" interaction.
-
-`r vertskip`
-
-```{r, echo=!SUPP_INFO}
-print(summary(mod_perm_N))
-```
-`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
-Linear regression model of long-term boost in the news, with added "age by manner of death" interaction.
-
-`r vertskip`
-
-```{r, echo=!SUPP_INFO}
-print(summary(mod_peak_T))
-```
-`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
-Linear regression model of short-term boost on Twitter, with added "age by manner of death" interaction.
-
-`r vertskip`
-
-```{r, echo=!SUPP_INFO}
-print(summary(mod_perm_T))
-```
-`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
-Linear regression model of long-term boost on Twitter, with added "age by manner of death" interaction.
-
 
 ## Models of news-vs.-Twitter boost difference for fixed person (without interactions)
 
-```{r regression analysis NEWS vs. TWITTER, fig.width=5, fig.height=3, echo=!SUPP_INFO}
-mods <- run_regression_analysis_T_vs_N(ranks=FALSE)
-mod_peak <- mods$mod_peak
-mod_perm <- mods$mod_perm
-
-print(summary(mod_peak))
+```{r regression analysis NEWS vs. TWITTER, echo=!SUPP_INFO}
+for (ranks in c(FALSE, TRUE)) {
+  mods <- run_regression_analysis_T_vs_N(ranks)
+  
+  print_regression_table_T_vs_N(mods, ranks)
+  
+  print_model_description('NEWS vs. TWITTER', 'short-term boost', ranks)
+  print(summary(mods$mod_peak))
+  
+  print_model_description('NEWS vs. TWITTER', 'long-term boost', ranks)
+  print(summary(mods$mod_perm))
+}
 ```
-`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
-Linear regression model of news-vs.-Twitter difference in short-term boost.
 
-`r vertskip`
-
-```{r, echo=!SUPP_INFO}
-print(summary(mod_perm))
-```
-`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
-Linear regression model of news-vs.-Twitter difference in long-term boost.
 
 ## Models of news-vs.-Twitter boost difference for fixed person (with "age by manner of death" interaction)
 
 ```{r regression N vs T, fig.width=10, fig.height=3, echo=!SUPP_INFO}
-predictors <- '0 + mean_before_relrank_diff + age_group + death_type + gender + anglo + type_group + age_group:death_type'
-mod_peak <- lm(as.formula(sprintf('peak_mean_boost_relrank_diff ~ %s', predictors)), lmdata)
-mod_perm <- lm(as.formula(sprintf('perm_boost_relrank_diff ~ %s', predictors)), lmdata)
-ylim <- c(-0.45, 0.45)
-ylim <- c(-1, 0.45)
-par(mfrow=c(1,2))
-plot_age_coeffs_for_death_types(mod_peak, NA, 'peak_mean_boost_diff', 70, ylim, 'black')
-plot_age_coeffs_for_death_types(mod_perm, NA, 'perm_boost_diff', 70, ylim, 'black')
+for (ranks in c(FALSE, TRUE)) {
+  mods <- run_regression_analysis_T_vs_N_for_death_types(ranks)
+  # Short-term.
+  print_model_description('NEWS vs. TWITTER', 'short-term boost', ranks)
+  print(summary(mods$mod_peak))
+  # Long-term.
+  print_model_description('NEWS vs. TWITTER', 'long-term boost', ranks)
+  print(summary(mods$mod_perm))
+  # Plots.
+  par(mfrow=c(1,2))
+  plot_age_coeffs_for_death_types(mods$mod_peak, NA, 'peak_mean_boost_diff', BASE_AGE, ranks,
+                                  if (ranks) c(-0.45, 0.45) else c(-1.5, 0.5), 'black')
+  plot_age_coeffs_for_death_types(mods$mod_perm, NA, 'perm_boost_diff', BASE_AGE, ranks,
+                                  if (ranks) c(-0.45, 0.45) else c(-0.5, 0.5), 'black')
+}
 ```
-`r figcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
-Dependence of news-vs.-Twitter boost difference (for fixed person) on age at death.
-
-`r vertskip`
-
-```{r, echo=!SUPP_INFO}
-print(summary(mod_peak))
-```
-`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
-Linear regression model of news-vs.-Twitter difference in short-term boost, with added "age by manner of death" interaction.
-
-`r vertskip`
-
-```{r, echo=!SUPP_INFO}
-print(summary(mod_perm))
-```
-`r tabcap(!SUPP_INFO||INCLUDE_REGRESSION_IN_SUPP_INFO)`
-Linear regression model of news-vs.-Twitter difference in long-term boost, with added "age by manner of death" interaction.
-
 
 
 ```{r mega figure, fig.width=10, fig.height=10, include=FALSE}
