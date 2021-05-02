@@ -280,7 +280,7 @@ get_rel_date_matrix <- function(medium, data, num_art, chunk_size) {
       l$date <- rownames(l)
       # Initialize y, the count vector for the current mid.
       # y has 2*(MAX_DATE-MIN_DATE)+1 entries, of which only MAX_DATE-MIN_DATE+1 are well-defined (as per
-      # our discussion of NRELDATES in load_common_data_and_functions.r).
+      # our discussion of NRELDATES above).
       # For the MAX_DATE-MIN_DATE days for which we have no data, the values are set to NA.
       # We also set to NA the values for the days that have no Spinn3r data (primarily the 2010 hole).
       # For the remaining MAX_DATE-MIN_DATE+1 days, we initialize values to 0.
@@ -2161,4 +2161,41 @@ for (ranks in c(FALSE, TRUE)) {
 
 ```{r mega figure, fig.width=10, fig.height=10, include=FALSE}
 draw_mega_figure()
+```
+
+# Article length
+
+```{r Article length, echo=!SUPP_INFO}
+# Note: this uses all non-Twitter documents, not only those from the news domains. Also,
+# it uses only a set of 2638 people that were used in an early stage of the project
+# (meeting the criterion "min_num_active_days=50").
+
+san_all <- read.table(pipe(sprintf('gunzip -c %s/sanity_check.tsv.gz', DATADIR)), sep='\t', as.is=TRUE,
+                      col.names=c("mid", "date", "colon","comma", "exclamationMark", "fullStop",
+                                  "numWords", "questionMark", "semicolon", "theVsA_log10",
+                                  "vowelPercentage"))
+
+ok_mids <- intersect(unique(san_all$mid), unique(rownames(lmdata_N)))
+san <- san_all[san_all$mid %in% ok_mids,]
+san$rel_date <- as.numeric(as.Date(san$date) - as.Date(death_dates[san$mid]))
+
+x <- do.call(rbind, mclapply(split(san, san$mid), function(l) {
+  dod <- as.Date(death_dates[l$mid[1]])
+  offset <- as.numeric(MAX_DATE-MIN_DATE) + 1
+  y <- rep(NA, NRELDATES)
+  # Log10.
+  y[l$rel_date + offset] <- log10(l$numWords)
+  y[as.numeric(as.Date(EMPTY_DAYS)-dod) + offset] <- NA
+  return(y)
+}, mc.cores=6))
+extreme <- (NRELDATES-1)/2
+colnames(x) <- -extreme:extreme
+
+x <- x[, colnames(x) %in% -N:N]
+premeans <- rowMeans(x[,colnames(x) < 0], na.rm=TRUE)
+x_norm <- x - premeans
+
+plot(colnames(x), colMeans(x_norm, na.rm=TRUE), type='l')
+abline(v=0, h=0, col='red')
+abline(v=c(30), col='green')
 ```
