@@ -2184,7 +2184,7 @@ x <- do.call(rbind, mclapply(split(san, san$mid), function(l) {
   offset <- as.numeric(MAX_DATE-MIN_DATE) + 1
   y <- rep(NA, NRELDATES)
   # Log10.
-  y[l$rel_date + offset] <- log10(l$numWords)
+  y[l$rel_date + offset] <- log(l$numWords)
   y[as.numeric(as.Date(EMPTY_DAYS)-dod) + offset] <- NA
   return(y)
 }, mc.cores=6))
@@ -2195,7 +2195,41 @@ x <- x[, colnames(x) %in% -N:N]
 premeans <- rowMeans(x[,colnames(x) < 0], na.rm=TRUE)
 x_norm <- x - premeans
 
-plot(colnames(x), colMeans(x_norm, na.rm=TRUE), type='l')
-abline(v=0, h=0, col='red')
-abline(v=c(30), col='green')
+regdata <- cbind(lmdata_N[rownames(x_norm),], x_norm)
+# predictors <- 'mean_before_relrank + age_group + death_type + gender + anglo + type_group'
+predictors <- 'mean_before_relrank + age_group + death_type + anglo'
+predictors <- 'mean_before_relrank + death_type + anglo'
+# Only constant, i.e., estimate mean (plus standard errors).
+predictors <- '1'
+
+coefs <- do.call(rbind, lapply(-N:N, function(t)
+  summary(lm(as.formula(sprintf('`%s` ~ %s', t, predictors)), regdata))$coefficients[1,1:2]))
+est <- coefs[,1]
+lo <- coefs[,1]-2*coefs[,2]
+hi <- coefs[,1]+2*coefs[,2]
+
+# sm <- function(y) ksmooth(-N:N, y, bandwidth=4)$y
+sm <- function(y) y
+plot(-N:N, sm(est), type='l', lwd=2, col='#000000', bty='n', axes=FALSE,
+     # ylim=range(c(lo,hi)), 
+     ylim=c(-0.7,0.7), 
+     panel.first=c(abline(v=0, h=0, col='red'), abline(v=c(30), col='green'),
+                   polygon(x=c(-N:N, rev(-N:N)), y=c(sm(lo), rev(sm(hi))), col='#00000040', border=NA),
+                   axis(1, at=seq(-350,350,50), las=2), axis(2)))
+
+plot(-N:N, colMeans(x_norm, na.rm=TRUE), type='l', lwd=2, col='#000000', bty='n', axes=FALSE,
+     # ylim=range(c(lo,hi)), 
+     ylim=c(-0.7,0.7), 
+     panel.first=c(abline(v=0, h=0, col='red'), abline(v=c(30), col='green'),
+                   axis(1, at=seq(-350,350,50), las=2), axis(2)))
+
+
+
+long <- reshape(regdata,
+        direction = "long",
+        varying = list(names(regdata)[40:760]),
+        v.names = "value",
+        idvar = "mid",
+        timevar = "time",
+        times = -360:360)
 ```
