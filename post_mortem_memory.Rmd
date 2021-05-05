@@ -3,16 +3,16 @@ title: "Post-mortem memory of public figures in news and social media"
 author: "Robert West, Jure Leskovec, Christopher Potts"
 date: ""
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ```{r include=FALSE}
 # Set this to FALSE if you don't want to save plots to PDFs.
-SAVE_PLOTS <- TRUE
+SAVE_PLOTS <- FALSE
 
 # Begin of nasty trick from here: https://stackoverflow.com/a/46686678
-SUPP_INFO <- FALSE
+SUPP_INFO <- TRUE
 INCLUDE_REGRESSION_IN_SUPP_INFO <- TRUE
 ```
 \newif\ifshowall
@@ -618,22 +618,22 @@ make_bio_table <- function() {
   summary_table_lm[c('Natural', 'Unnatural')] <-
     to_percentage((summary(lmdata_N$death_type[idx]) / sum(summary(lmdata_N$death_type[idx])))[c('natural', 'unnatural')])
   
-  ### Cultural background
+  ### Language
   
-  summary_table_filtered['Cultural background'] <- ''
-  summary_table_all['Cultural background'] <- ''
-  summary_table_lm['Cultural background'] <- ''
+  summary_table_filtered['Language'] <- ''
+  summary_table_all['Language'] <- ''
+  summary_table_lm['Language'] <- ''
   
   idx <- stats_N$anglo != 'unknown'
-  summary_table_filtered['Cultural background N/A'] <- to_percentage(mean(!idx))
+  summary_table_filtered['Language N/A'] <- to_percentage(mean(!idx))
   summary_table_filtered[c('Anglophone', 'Non-anglophone')] <- to_percentage((summary(stats_N$anglo[idx]) / sum(summary(stats_N$anglo[idx])))[c('anglo', 'non_anglo')])
   
   idx <- stats_all$anglo != 'unknown'
-  summary_table_all['Cultural background N/A'] <- to_percentage(mean(!idx))
+  summary_table_all['Language N/A'] <- to_percentage(mean(!idx))
   summary_table_all[c('Anglophone', 'Non-anglophone')] <- to_percentage((summary(stats_all$anglo[idx]) / sum(summary(stats_all$anglo[idx])))[c('anglo', 'non_anglo')])
   
   idx <- lmdata_N$anglo != 'unknown'
-  summary_table_lm['Cultural background N/A'] <- to_percentage(mean(!idx))
+  summary_table_lm['Language N/A'] <- to_percentage(mean(!idx))
   summary_table_lm[c('Anglophone', 'Non-anglophone')] <- to_percentage((summary(lmdata_N$anglo[idx]) / sum(summary(lmdata_N$anglo[idx])))[c('anglo', 'non_anglo')])
   
   ### Notable type
@@ -809,6 +809,30 @@ lognorm_constrained_fit <- function(medium) {
   return(model)
 }
 
+bipower_fit <- function(medium) {
+  df <- make_df_for_fit(medium)
+  
+  # First approximation: r = 0.
+  # log(y) ~ log(N*t^-p) = log(N)-p*log(t)
+  model0 <- lm(log(y) ~ log(t), data=df)
+  N0 <- exp(coef(model0)[1])
+  p0 <- -coef(model0)[2]
+
+  # Second approximation: q = 0.
+  model1 <- nls(log(y) ~ log( N/(p+r) * (p*t^-(p+r) + r) ),
+                start=list(p=p0, N=N0, r=0),
+                data=df, control=list(maxiter=1e8), algorithm='port')
+  N1 <- coef(model1)['N']
+  p1 <- coef(model1)['p']
+  r1 <- coef(model1)['r']
+
+  # Full model.
+  model <- nls(log(y) ~ log( N/(p-q+r) * ((p-q)*t^-(p+r) + r*t^-q) ),
+               start=list(p=p1, N=N1, r=r1, q=0),
+               data=df, control=list(maxiter=1e8), algorithm='port', lower=c(q=0))
+  return(model)
+}
+
 power_fit <- function(medium) {
   df <- make_df_for_fit(medium)
   # log(y) ~ a + b*log(t)
@@ -861,7 +885,7 @@ hyperbolic_power_fit <- function(medium) {
   return(model)
 }
 
-plot_avg_fraction_of_mentioning_docs <- function(medium, biexp_model=NULL) {
+plot_avg_fraction_of_mentioning_docs <- function(medium, model=NULL, model_type=NULL) {
   if (SAVE_PLOTS) pdf(sprintf('%s/avg_mention_curve_%s.pdf', PLOTDIR, medium), width=3.4, height=3.4,
                       pointsize=8, family='Helvetica', useDingbats=FALSE)
   par(mar=c(3,3,1,1))
@@ -887,16 +911,23 @@ plot_avg_fraction_of_mentioning_docs <- function(medium, biexp_model=NULL) {
   arrows(x0=325, x1=355, y0=y365, y1=y365, length=0.05)
   text(325, y365, '365 days', adj=c(1.1, 0.5))
 
-  if (!is.null(biexp_model)) {
-    biexp_coefs <- coef(biexp_model)
-    N <- biexp_coefs['N']
-    p <- biexp_coefs['p']
-    r <- biexp_coefs['r']
-    q <- biexp_coefs['q']
+  if (!is.null(model)) {
+    coefs <- coef(model)
+    N <- coefs['N']
+    p <- coefs['p']
+    r <- coefs['r']
+    q <- coefs['q']
 
     t <- 1:max_day
-    mem_comm <- N * exp(-(p+r)*t)
-    mem_cult <- N/(p-q+r)*r * (exp(-q*t) - exp(-(p+r)*t))
+    if (model_type == 'Biexponential') {
+      mem_comm <- N * exp(-(p+r)*t)
+      mem_cult <- N/(p-q+r)*r * (exp(-q*t) - exp(-(p+r)*t))
+    } else if (model_type == 'Bipower') {
+      mem_comm <- N * t^-(p+r)
+      mem_cult <- N/(p-q+r)*r * (t^-q - t^-(p+r))
+    } else {
+      stop("model_type must be 'biexp' or 'bipower'!")
+    }
     mem <- mem_comm + mem_cult
     
     lines(t, log10(mem_comm), lty=1, lwd=2, col=COL_GREEN)
@@ -904,7 +935,7 @@ plot_avg_fraction_of_mentioning_docs <- function(medium, biexp_model=NULL) {
     lines(t, log10(mem), lty=1, lwd=2, col='black')
 
     legend('topright', bty='n',
-           legend=c('Daily average', 'Biexponential fit S(t) = u(t) + v(t)',
+           legend=c('Daily average', sprintf('%s fit S(t) = u(t) + v(t)', model_type),
                     'Communicative memory u(t)', 'Cultural memory v(t)'),
            seg.len=3,
            pch=c(1,NA,NA,NA),
@@ -951,7 +982,7 @@ plot_model_fit <- function(medium, name, model, predict, log='') {
   if (log=='x') text(400, max(y),
                       sprintf('R² = %.3f\nAIC = %.0f', r2, aic),
                       adj=c(1,1), cex=1)
-  else text(200, max(y), name, adj=c(0.5,1), cex=1.7)
+  else text(200, max(y), name, adj=c(0.5,1), cex=1.4)
 }
 
 plot_all_model_fits <- function(medium) {
@@ -963,11 +994,12 @@ plot_all_model_fits <- function(medium) {
                  "Hyperbolic-power"=hyperbolic_power_fit(medium),
                  "Log-normal-inspired"=lognorm_constrained_fit(medium),
                  "Exponential-power"=exp_power_fit(medium),
-                 "Biexponential"=biexp_fit(medium)
+                 "Biexponential"=biexp_fit(medium),
+                 "Bipower"=bipower_fit(medium)
                  )
   if (SAVE_PLOTS) pdf(sprintf('%s/all_model_fits_%s.pdf', PLOTDIR, medium),
                       width=3.5, height=9, pointsize=8, family='Helvetica', useDingbats=FALSE)
-  par(mfcol=c(8,2))
+  par(mfcol=c(9,2))
   for (log in c('', 'x')) {
     for (name in names(models)) {
       model <- models[[name]]
@@ -977,10 +1009,10 @@ plot_all_model_fits <- function(medium) {
   if (SAVE_PLOTS) dev.off()
 }
 
-plot_comm_vs_cult_mem <- function(medium, biexp_coefs=NULL) {
+plot_comm_vs_cult_mem <- function(medium, coefs, model_type) {
   if (SAVE_PLOTS) pdf(sprintf('%s/comm_vs_cult_mem_%s.pdf', PLOTDIR, medium), width=3.4, height=2.4,
                       pointsize=8, family='Helvetica', useDingbats=FALSE)
-  par(mar=c(4,4,1,1))
+  par(mar=c(4,4,1,1.5))
   if (medium == 'NEWS') {
     x <- x_N
   } else if (medium == 'TWITTER') {
@@ -988,26 +1020,39 @@ plot_comm_vs_cult_mem <- function(medium, biexp_coefs=NULL) {
   } else {
     stop("medium must be NEWS or TWITTER!")
   }
-  max_day <- 40
-  t <- seq(0, max_day-1, 0.01)
-  N <- biexp_coefs['N']
-  p <- biexp_coefs['p']
-  r <- biexp_coefs['r']
-  q <- biexp_coefs['q']
-  u <- function(t, N, p, r, q) N * exp(-(p+r)*t)
-  v <- function(t, N, p, r, q) N/(p-q+r)*r * (exp(-q*t) - exp(-(p+r)*t))
+  max_day <- 150
+  t <- seq(1, max_day, 0.01)
+  N <- coefs['N']
+  p <- coefs['p']
+  r <- coefs['r']
+  q <- coefs['q']
+  if (model_type == 'Biexponential') {
+    u <- function(t, N, p, r, q) N * exp(-(p+r)*t)
+    v <- function(t, N, p, r, q) N/(p-q+r)*r * (exp(-q*t) - exp(-(p+r)*t))
+  } else if (model_type == 'Bipower') {
+    u <- function(t, N, p, r, q) N * t^-(p+r)
+    v <- function(t, N, p, r, q) N/(p-q+r)*r * (t^-q - t^-(p+r))
+  } else {
+    stop("model_type must be 'biexp' or 'bipower'!")
+  }
   mem_comm <- u(t, N, p, r, q)
   mem_cult <- v(t, N, p, r, q)
   ratio <- mem_cult / (mem_comm + mem_cult)
-  plot(t+1, ratio, type='l', bty='n', col=COL[[medium]], lwd=2,
+  plot(t, ratio, type='l', bty='n', col=COL[[medium]], lwd=2, ylim=c(0,1), axes=FALSE,
        xlab='Days since death', ylab='Fraction of cultural memory')
-  for (perc in c(0.5, 0.99)) {
+  axis(1)
+  axis(2, at=seq(0,1,0.25))
+  percs <- c(0.25, 0.5, 0.75)
+  cols <- c('black', COL_MAGENTA, COL_LIGHTBLUE)
+  for (i in 1:length(percs)) {
+    perc <- percs[i]
+    col <- cols[i]
     idx <- min(which(ratio>=perc))
-    points(t[idx]+1, ratio[idx], lwd=3, pch=20, col='black', cex=2)
-    segments(-5, ratio[idx], t[idx]+1, ratio[idx], col='black', lty=2)
-    segments(t[idx]+1, -5, t[idx]+1, ratio[idx], col='black', lty=2)
-    text(t[idx]+1, ratio[idx], adj=c(-0.2, 1.2),
-         labels=sprintf('%.0f%% after\n%.0f days', 100*perc, ceiling(t[idx]+1)))
+    points(t[idx], ratio[idx], lwd=3, pch=20, col=col, cex=2)
+    segments(-5, ratio[idx], t[idx], ratio[idx], col=col, lty=2)
+    segments(t[idx], -5, t[idx], ratio[idx], col=col, lty=2)
+    text(t[idx], ratio[idx], adj=c(-0.1, 0.5), col=col,
+         labels=sprintf('%.0f%% after %.0f days', 100*perc, ceiling(t[idx])))
   }
   if (SAVE_PLOTS) dev.off()
 }
@@ -1338,7 +1383,7 @@ print_regression_table <- function(mods_N, mods_T, ranks) {
                                        "\\shortstack{Long-term boost\\\\(News)}",
                                        "\\shortstack{Long-term boost\\\\(Twitter)}"),
                   custom.coef.names=c("(Intercept)", "Pre-mortem mean (relative rank)", age_names, "Manner of death: unnatural",
-                                      "Gender: female", paste("Cultural background:", c("non-anglophone", "unknown")),
+                                      "Gender: female", paste("Language:", c("non-anglophone", "unknown")),
                                       paste("Notability type:", type_names)),
                   reorder.coef=c(1,2,10,12:13,11,14:18,3:9), table=FALSE)
   cat(table, file=sprintf('%s/lm_coef_T_and_N%s.tex', TABLEDIR, if (ranks) '_relrank' else ''), sep="\n")
@@ -1352,7 +1397,7 @@ print_regression_table_T_vs_N <- function(mods, ranks) {
                   label = "table:coefficients News vs. Twitter", custom.model.names=c("Short-term boost", "Long-term boost"),
                   custom.coef.names=c("(Intercept)", "Pre-mortem mean (relative-rank diff.)", age_names,
                                       "Manner of death: unnatural",
-                                      "Gender: female", paste("Cultural background:", c("non-anglophone", "unknown")),
+                                      "Gender: female", paste("Language:", c("non-anglophone", "unknown")),
                                       paste("Notability type:", type_names)),
                   reorder.coef=c(1,2,10,12:13,11,14:18,3:9), table=FALSE)
   cat(table, file=sprintf('%s/lm_coef_T_vs_N%s.tex', TABLEDIR, if (ranks) '_relrank' else ''), sep="\n")
@@ -1365,6 +1410,71 @@ print_model_description <- function(medium, depvar, ranks) {
   cat(sprintf('Dependent variable: %s\n', depvar))
   cat(sprintf('Transformation on dependent variable: %s\n', if (ranks) 'RELATIVE RANKS' else 'NONE'))
   cat('#####################################################\n')
+}
+
+load_doc_length_regression_data <- function() {
+  file <- sprintf('%s/RData/log_doc_length_ratios.RData', DATADIR)
+  if (!file.exists(file)) {
+    # Note: this uses all non-Twitter documents, not only those from the news domains. Also,
+    # it uses only a set of 2638 people that were used in an early stage of the project
+    # (meeting the criterion "min_num_active_days=50"), which are then reduced to the subset
+    # of 579 people that are also used in the main regression analysis about post-mortem mention
+    # frequency.
+    doc_len_all <- read.table(pipe(sprintf('gunzip -c %s/mean_doc_length_per_day.tsv.gz', DATADIR)),
+                              sep='\t', as.is=TRUE, col.names=c('mid', 'date', 'numWords'))
+    ok_mids <- intersect(unique(doc_len_all$mid), unique(rownames(lmdata_N)))
+    doc_len <- doc_len_all[doc_len_all$mid %in% ok_mids,]
+    doc_len$rel_date <- as.numeric(as.Date(doc_len$date) - as.Date(death_dates[doc_len$mid]))
+    feature <- 'numWords'
+    
+    x <- do.call(rbind, mclapply(split(doc_len, doc_len$mid), function(l) {
+      dod <- as.Date(death_dates[l$mid[1]])
+      offset <- as.numeric(MAX_DATE-MIN_DATE) + 1
+      y <- rep(NA, NRELDATES)
+      # Log.
+      y[l$rel_date + offset] <- log(l[,feature])
+      y[as.numeric(as.Date(EMPTY_DAYS)-dod) + offset] <- NA
+      return(y)
+    }, mc.cores=6))
+    extreme <- (NRELDATES-1)/2
+    colnames(x) <- -extreme:extreme
+    
+    x <- x[, colnames(x) %in% -100:N]
+    premeans <- rowMeans(x[,colnames(x) <= -30], na.rm=TRUE)
+    x_norm <- x - premeans
+    regdata <- cbind(lmdata_N[rownames(x_norm),], x_norm)
+    save(regdata, file=file)
+  } else {
+    load(file)
+  }
+  return(regdata)
+}
+
+plot_doc_length_increase <- function(regdata, predictors, ylab=NULL) {
+  coefs <- do.call(rbind,
+                   lapply(-100:N,
+                          function(t) summary(lm(as.formula(sprintf('`%s` ~ %s', t, predictors)),
+                                                 regdata))$coefficients[1,1:2]))
+  est <- coefs[,1]
+  lo <- coefs[,1]-2*coefs[,2]
+  hi <- coefs[,1]+2*coefs[,2]
+
+  # Natural deaths.
+  plot(-100:N, exp(est)-1, type='l', lwd=2, col='#000000', bty='n', axes=FALSE,
+       ylim=c(-0.7,0.7),xlab='Days since death', ylab=ylab,
+       main='Mean relative document length increase', cex.main=1,
+       panel.first=c(abline(v=0, h=0, col='gray'), #abline(v=c(30), col='red'),
+                     polygon(x=c(-100:N, rev(-100:N)), y=c(lo, rev(hi)), col='#00000040', border=NA),
+                     axis(1, at=seq(-90,360,30), las=2), axis(2)))
+
+  # Unnatural deaths.
+  # predictors <- 'mean_before_relrank + age_group + death_type + anglo'
+  # coefs <- do.call(rbind,
+  #                  lapply(-100:N,
+  #                         function(t) sum(summary(lm(as.formula(sprintf('`%s` ~ %s', t, predictors)),
+  #                                                regdata))$coefficients[c(1,10),1])))
+  # plot(-100:N, exp(coefs[,1])-1, type='l', lwd=2, col='#000000', bty='n', axes=FALSE, ylim=c(-0.7,0.7),
+  #      panel.first=c(abline(v=0, h=0, col='gray'), axis(1, at=seq(-90,360,30), las=2), axis(2)))
 }
 
 draw_mega_figure <- function() {
@@ -1548,7 +1658,6 @@ k <- 4
 km_N <- cluster_result_N$clustering[[which(cluster_result_N$K==k)]]
 km_T <- cluster_result_T$clustering[[which(cluster_result_T$K==k)]]
 ```
-
 
 # Number of documents per day
 
@@ -1753,20 +1862,20 @@ __Twitter:__
 # Average mention time series
 
 ```{r, echo=!SUPP_INFO}
-biexp_model_N <- biexp_fit('NEWS')
-biexp_model_T <- biexp_fit('TWITTER')
+bipower_model_N <- bipower_fit('NEWS')
+bipower_model_T <- bipower_fit('TWITTER')
 ```
 
 `r '__(a) News__'`
 
 ```{r, fig.width=6, fig.height=5, echo=!SUPP_INFO}
-plot_avg_fraction_of_mentioning_docs('NEWS', biexp_model=biexp_model_N)
+plot_avg_fraction_of_mentioning_docs('NEWS', bipower_model_N, 'Bipower')
 ```
 
 `r '__(b) Twitter__'`
 
 ```{r, fig.width=6, fig.height=5, echo=!SUPP_INFO}
-plot_avg_fraction_of_mentioning_docs('TWITTER', biexp_model=biexp_model_T)
+plot_avg_fraction_of_mentioning_docs('TWITTER', bipower_model_T, 'Bipower')
 ```
 
 `r figcap(!SUPP_INFO)`
@@ -1774,18 +1883,18 @@ Average mention time series, obtained via the arithmetic mean of the individual 
 for __(a)__ news and __(b)__ Twitter.
 
 
-## Biexponential model parameters
+## Bipower model parameters
 
 News:
 
 ```{r, echo=!SUPP_INFO}
-coef(biexp_model_N)
+coef(bipower_model_N)
 ```
 
 Twitter:
 
 ```{r, echo=!SUPP_INFO}
-coef(biexp_model_T)
+coef(bipower_model_T)
 ```
 \fi
 
@@ -1793,14 +1902,14 @@ coef(biexp_model_T)
 
 ```{r plot_comm_vs_cult_mem, fig.width=9, fig.height=3, echo=if (!SUPP_INFO) -c(1,4) else FALSE}
 par(mfrow=c(1,2))
-plot_comm_vs_cult_mem('NEWS', biexp_coefs=coef(biexp_model_N))
-plot_comm_vs_cult_mem('TWITTER', biexp_coefs=coef(biexp_model_T))
+plot_comm_vs_cult_mem('NEWS', coef(bipower_model_N), 'Bipower')
+plot_comm_vs_cult_mem('TWITTER', coef(bipower_model_T), 'Bipower')
 par(.default_par)
 ```
 
 `r figcap(TRUE)`
 Proportion of cultural vs. communicative memory.
-On day $t$ after death, the total collective memory according to the biexponential model fit is $S(t)=u(t)+v(t)$, where $u(t)$ is the communicative memory, and $v(t)$ is the cultural memory.
+On day $t$ after death, the total collective memory according to the bipower model fit is $S(t)=u(t)+v(t)$, where $u(t)$ is the communicative memory, and $v(t)$ is the cultural memory.
 We plot the proportion $v(t)/S(t)$ as a function of $t$.
 _Left:_ news. _Right:_ Twitter.
 
@@ -1818,11 +1927,15 @@ plot_all_model_fits('TWITTER')
 ```
 
 `r figcap(TRUE)`
-Comparison of eight models $S(t)$ for fitting empirical mention frequencies, for __(a)__ the news and __(b)__ Twitter.
+Comparison of nine models $S(t)$ for fitting empirical mention frequencies, for __(a)__ the news and __(b)__ Twitter.
 All $y$-axes are logarithmic.
 The left and right plots in each row show the same fits, the only difference being that the left plots have linear $x$-axes, whereas the right plots have logarithmic $x$-axes.
-Fits are nonlinear least-squares fits obtained in log space, i.e., logarithms were taken of both the empirical data and the model $S(t)$ before performing the least-squares optimization (see equation (5) in the paper for the case of the biexponential model).
-The biexponential function was introduced by Candia et al. ("The universal decay of collective memory and attention." _Nature Human Behaviour_. 2019; 3(1):82-91) and is defined in equation (4) of the paper.
+Fits are nonlinear least-squares fits obtained in log space, i.e., logarithms were taken of both the empirical data and the model $S(t)$ before performing the least-squares optimization (see equation (6) in the paper for the case of the bipower model).
+The bipower function is defined in equation (4) of the paper.
+The biexponential function was introduced by Candia et al. ("The universal decay of collective memory and attention." _Nature Human Behaviour_. 2019; 3(1):82-91) and is parameterized by $N,p,q,r>0$, as follows:
+
+* Biexponential: $S(t) = \frac{N}{p+r-q} \left(  (p-q) e^{-(p+r)t} + re^{-qt} \right)$.
+
 Theoretical motivations for six of the seven remaining functions are given by Rubin and Wenzel ("One hundred years of forgetting: A quantitative description of retention." _Psychological Review_. 1996; 103(4):734-760).
 Four of these functions are parameterized by two parameters $a,b>0$, as follows:
 
@@ -1831,18 +1944,18 @@ Four of these functions are parameterized by two parameters $a,b>0$, as follows:
 * Logarithmic: $S(t) = a - b \log t$, i.e., $\log S(t) = \log(a - b \log t)$.
 * Power: $S(t) = a \, t^{-b}$, i.e., $\log S(t) = \log a - b \log t$.
 
-The four above functions share the shortcoming of being concave (at best linear, in the case of the power function) when plotted on log-log axes (i.e., $\log S(t)$ is a concave function of $\log t$, cf. right columns), whereas the empirical curves are convex on log-log axes.
+The four above functions share the property of being concave (exponential, hyperbolic, logarithmic) or linear (power) when plotted on log-log axes (i.e., $\log S(t)$ is a concave function of $\log t$, cf. right columns), whereas the empirical curves are convex on log-log axes.
 
-Rubin and Wenzel also proposed generalized versions of the hyperbolic and exponential functions, called hyperbolic-power and exponential-power functions, respectively, where $t$ is replaced by the power $t^c$, where $c$ is a third parameter.
+Rubin and Wenzel also proposed generalized versions of the exponential and hyperbolic functions, called exponential-power and hyperbolic-power functions, respectively, where $t$ is replaced by the power $t^c$, where $c$ is a third parameter.
 (Analogous generalized versions of the logarithmic and power functions are not necessary, as they can already be expressed by the plain logarithmic and power functions, since $b \log t^c = (bc) \log t$.)
-For $c>0$, the hyperbolic-power and exponential-power functions, too, are concave in log-log space, but when allowing for $b,c < 0$, they can be made convex and are thus better suited for fitting the empirical data (note that, in the following specifications, we maintain $a,b,c > 0$, but replace $b$ by $-b$, and $c$ by $-c$):
+For $c>0$, the exponential-power and hyperbolic-power functions, too, are concave in log-log space, but when allowing for $b,c < 0$, they can be made convex and are thus better suited for fitting the empirical data (note that, in the following specifications, we maintain $a,b,c > 0$, but replace $b$ by $-b$, and $c$ by $-c$):
 
 * Exponential-power: $S(t) = a \, e^{bt^{-c}}$, i.e., $\log S(t) = \log a + b e^{-c \log t}$.
 * Hyperbolic-power: $S(t) = (a - bt^{-c})^{-1}$, i.e., $\log S(t) = -\log (a - be^{-c \log t})$.
 
-Finally, as the seventh function, we consider what Candia et al. refer to as the "log-normal" function, defined as
+Finally, as the last function, we consider what Candia et al. refer to as the "log-normal" function, defined as
 $S(t) = \exp(\log a - b \log t - c (\log t)^2)$.
-To recognize the fact that, although this function takes the functional form of the log-normal distribution, it is not actually used to fit a probability distribution here, we refer to the function as "log-normal-inspired".
+To recognize the fact that, although this function takes the functional form of the log-normal distribution, it is not actually used to describe a probability distribution here, we refer to the function as "log-normal-inspired".
 The log-normal-inspired function, too, is concave in log-log space, but can be made convex by replacing $c$ by $-c$, i.e.,
 $S(t) = \exp(\log a - b \log t + c (\log t)^2)$.
 Note, however, that this results in $S(t)$ being an increasing function of $t$ as $t \rightarrow \infty$, unlike the empirical data and unlike what one would require from a sound theoretical model of collective memory.
@@ -1856,7 +1969,7 @@ We quantify goodness of fit using two measures (results in the legends of the ri
 (2) in order to account for the varying model complexity (the models have between two and four parameters), via Akaike's information criterion (AIC; smaller is better).
 $R^2$ and AIC result in the same ordering of the eight models, and the ordering is identical across the two media (news and Twitter).
 In the figure, the models are sorted, top-down, in increasing order of goodness of fit.
-The biexponential model provides the best fit according to both measures ($R^2$ and AIC) and for both media (news and Twitter).
+The bipower model provides the best fit according to both measures ($R^2$ and AIC) and for both media (news and Twitter), with $R^2=0.989$ for the news and $R^2=0.985$ for Twitter.
 
 
 # Mention time series characteristics
@@ -2068,7 +2181,7 @@ Independent variables:
 * age at death (`age_group`)
 * manner of death (`death_type`)
 * notability type (`type_group`)
-* cultural background (`anglo`)
+* language (`anglo`)
 * gender (`gender`)
 
 Dependendent variables:
@@ -2158,78 +2271,29 @@ for (ranks in c(FALSE, TRUE)) {
 }
 ```
 
+# Document length
+
+```{r doc length, fig.width=10, fig.height=4, echo=if (!SUPP_INFO) -c(1) else FALSE}
+par(mfrow=c(1,2))
+regdata <- load_doc_length_regression_data()
+# Only constant, i.e., estimate mean (plus standard errors).
+plot_doc_length_increase(regdata, '1', 'Direct estimate')
+# Adjust for those predictors that were found to have a significant impact on short-term
+# post-mortem mention frequency in the news.
+# (All possible predictors: mean_before_relrank, age_group, death_type, gender, anglo, type_group.)
+plot_doc_length_increase(regdata, 'mean_before_relrank + age_group + death_type + anglo', 'Adjusted estimate')
+
+```
+`r figcap(TRUE)`
+Relative length increase of news documents that mention deceased public figures, with respect to the respective public figure's pre-mortem mean document length, as a function of days since death.
+All means in this analysis are geometric means.
+Error bars are 95% confidence intervals approximated as $\pm 2$ standard errors.
+__Left:__ Direct mean estimates of relative length increase.
+__Right:__ Estimates adjusted for population drift (since certain groups of people are more likely to be mentioned post-mortem than others). Each day $t$'s adjusted estimate was obtained from a separate linear regression model for day $t$ only, which included each person $i$ mentioned that day as a data point, with $\log(L_{it}/P_i)$ as the dependent variable (where $L_{it}$ is $i$'s mean document length on day $t$, and $P_i$ is $i$'s pre-mortem mean document length),
+and with independent variables defined by the predictors that were previously found to be significantly associated with short-term post-mortem mention frequency (language, pre-mortem mean mention frequency rank, manner of death, age group), such that estimates are for anglophones of median pre-mortem popularity who died an unnatural death at age 70--79 years.
+The adjusted estimate of the (geometric) mean relative length increase for day $t$ is then given by $e^{a_t}-1$, where $a_t$ is the intercept of the regression for day $t$.
+We see that, both with and without adjustment, the documents that mentioned a person on the day of their death were on average about 40% shorter than documents that mentioned the person before their death, and that the pre-mortem level is reached again after about one month.
 
 ```{r mega figure, fig.width=10, fig.height=10, include=FALSE}
 draw_mega_figure()
-```
-
-# Article length
-
-```{r Article length, echo=!SUPP_INFO}
-# Note: this uses all non-Twitter documents, not only those from the news domains. Also,
-# it uses only a set of 2638 people that were used in an early stage of the project
-# (meeting the criterion "min_num_active_days=50").
-
-san_all <- read.table(pipe(sprintf('gunzip -c %s/sanity_check.tsv.gz', DATADIR)), sep='\t', as.is=TRUE,
-                      col.names=c("mid", "date", "colon","comma", "exclamationMark", "fullStop",
-                                  "numWords", "questionMark", "semicolon", "theVsA_log10",
-                                  "vowelPercentage"))
-
-ok_mids <- intersect(unique(san_all$mid), unique(rownames(lmdata_N)))
-san <- san_all[san_all$mid %in% ok_mids,]
-san$rel_date <- as.numeric(as.Date(san$date) - as.Date(death_dates[san$mid]))
-
-x <- do.call(rbind, mclapply(split(san, san$mid), function(l) {
-  dod <- as.Date(death_dates[l$mid[1]])
-  offset <- as.numeric(MAX_DATE-MIN_DATE) + 1
-  y <- rep(NA, NRELDATES)
-  # Log10.
-  y[l$rel_date + offset] <- log(l$numWords)
-  y[as.numeric(as.Date(EMPTY_DAYS)-dod) + offset] <- NA
-  return(y)
-}, mc.cores=6))
-extreme <- (NRELDATES-1)/2
-colnames(x) <- -extreme:extreme
-
-x <- x[, colnames(x) %in% -N:N]
-premeans <- rowMeans(x[,colnames(x) < 0], na.rm=TRUE)
-x_norm <- x - premeans
-
-regdata <- cbind(lmdata_N[rownames(x_norm),], x_norm)
-# predictors <- 'mean_before_relrank + age_group + death_type + gender + anglo + type_group'
-predictors <- 'mean_before_relrank + age_group + death_type + anglo'
-predictors <- 'mean_before_relrank + death_type + anglo'
-# Only constant, i.e., estimate mean (plus standard errors).
-predictors <- '1'
-
-coefs <- do.call(rbind, lapply(-N:N, function(t)
-  summary(lm(as.formula(sprintf('`%s` ~ %s', t, predictors)), regdata))$coefficients[1,1:2]))
-est <- coefs[,1]
-lo <- coefs[,1]-2*coefs[,2]
-hi <- coefs[,1]+2*coefs[,2]
-
-# sm <- function(y) ksmooth(-N:N, y, bandwidth=4)$y
-sm <- function(y) y
-plot(-N:N, sm(est), type='l', lwd=2, col='#000000', bty='n', axes=FALSE,
-     # ylim=range(c(lo,hi)), 
-     ylim=c(-0.7,0.7), 
-     panel.first=c(abline(v=0, h=0, col='red'), abline(v=c(30), col='green'),
-                   polygon(x=c(-N:N, rev(-N:N)), y=c(sm(lo), rev(sm(hi))), col='#00000040', border=NA),
-                   axis(1, at=seq(-350,350,50), las=2), axis(2)))
-
-plot(-N:N, colMeans(x_norm, na.rm=TRUE), type='l', lwd=2, col='#000000', bty='n', axes=FALSE,
-     # ylim=range(c(lo,hi)), 
-     ylim=c(-0.7,0.7), 
-     panel.first=c(abline(v=0, h=0, col='red'), abline(v=c(30), col='green'),
-                   axis(1, at=seq(-350,350,50), las=2), axis(2)))
-
-
-
-long <- reshape(regdata,
-        direction = "long",
-        varying = list(names(regdata)[40:760]),
-        v.names = "value",
-        idvar = "mid",
-        timevar = "time",
-        times = -360:360)
 ```
