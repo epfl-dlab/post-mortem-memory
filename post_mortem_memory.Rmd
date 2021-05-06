@@ -992,7 +992,7 @@ plot_all_model_fits <- function(medium) {
                  "Logarithmic"=log_fit(medium),
                  "Power"=power_fit(medium),
                  "Hyperbolic-power"=hyperbolic_power_fit(medium),
-                 "Log-normal-inspired"=lognorm_constrained_fit(medium),
+                 "Log-normal-based"=lognorm_constrained_fit(medium),
                  "Exponential-power"=exp_power_fit(medium),
                  "Biexponential"=biexp_fit(medium),
                  "Bipower"=bipower_fit(medium)
@@ -1955,14 +1955,14 @@ For $c>0$, the exponential-power and hyperbolic-power functions, too, are concav
 
 Finally, as the last function, we consider what Candia et al. refer to as the "log-normal" function, defined as
 $S(t) = \exp(\log a - b \log t - c (\log t)^2)$.
-To recognize the fact that, although this function takes the functional form of the log-normal distribution, it is not actually used to describe a probability distribution here, we refer to the function as "log-normal-inspired".
-The log-normal-inspired function, too, is concave in log-log space, but can be made convex by replacing $c$ by $-c$, i.e.,
+To recognize the fact that, although this function takes the functional form of the log-normal distribution, it is not actually used to describe a probability distribution here, we refer to the function as "log-normal-based".
+The log-normal-based function, too, is concave in log-log space, but can be made convex by replacing $c$ by $-c$, i.e.,
 $S(t) = \exp(\log a - b \log t + c (\log t)^2)$.
 Note, however, that this results in $S(t)$ being an increasing function of $t$ as $t \rightarrow \infty$, unlike the empirical data and unlike what one would require from a sound theoretical model of collective memory.
 We hence constrain the parameters such that the fitted function is monotonically decreasing over the modeled time range (days 1 to $t_{\max}=400$).
 Since the unconstrained function, when fitted to the empirical data, assumes a minimum at $1<t<t_{\max}$, the monotonicity constraint is equivalent to requiring the minimum to occur at $t=t_{\max}$, which happens for $b=-2ct_{\max}$ and gives rise to the following model:
 
-* Log-normal-inspired: $S(t) = \exp(\log a + c ((\log t)^2 - 2t_{\max}\log t))$, i.e., $\log S(t) = \log a + c ((\log t)^2 - 2t_{\max}\log t)$.
+* Log-normal-based: $S(t) = \exp(\log a + c ((\log t)^2 - 2t_{\max}\log t))$, i.e., $\log S(t) = \log a + c ((\log t)^2 - 2t_{\max}\log t)$.
 
 We quantify goodness of fit using two measures (results in the legends of the right plots):
 (1) via coefficients of determination ($R^2$; computed as the squared correlation between observed and predicted values on the log scale; larger is better);
