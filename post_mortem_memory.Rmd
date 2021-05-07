@@ -3,8 +3,9 @@ title: "Post-mortem memory of public figures in news and social media"
 author: "Robert West, Jure Leskovec, Christopher Potts"
 date: ""
 output:
-  pdf_document: default
   html_document: default
+  pdf_document:
+    keep_tex: true
 ---
 
 ```{r include=FALSE}
@@ -12,7 +13,7 @@ output:
 SAVE_PLOTS <- FALSE
 
 # Begin of nasty trick from here: https://stackoverflow.com/a/46686678
-SUPP_INFO <- TRUE
+SUPP_INFO <- FALSE
 INCLUDE_REGRESSION_IN_SUPP_INFO <- TRUE
 ```
 \newif\ifshowall
@@ -29,6 +30,10 @@ INCLUDE_REGRESSION_IN_SUPP_INFO <- TRUE
 # To hide code but show output: echo=FALSE
 # To hide output but show code: results="hide"
 # To hide code and output: include=FALSE
+```
+
+```{r include=FALSE}
+#library(knitr); knit_exit()
 ```
 
 ```{r load data and functions, echo=!SUPP_INFO, results="hide", message=FALSE}
@@ -974,7 +979,7 @@ plot_model_fit <- function(medium, name, model, predict, log='') {
   par(mar=c(3,3,1,1))
   plot(t, y, type='p', bty='n', lwd=2, xlab='', ylab='', col=COL[[medium]], las=0, log=log)
   mtext('Days since death', side=1, line=2, cex=0.6)
-  mtext('Mention frequency [log10]', side=2, line=2, cex=0.6)
+  mtext('Mention freq. [log10]', side=2, line=2, cex=0.6)
   lines(t, yhat, lwd=2)
 
   aic <- AIC(model)
@@ -982,7 +987,7 @@ plot_model_fit <- function(medium, name, model, predict, log='') {
   if (log=='x') text(400, max(y),
                       sprintf('R² = %.3f\nAIC = %.0f', r2, aic),
                       adj=c(1,1), cex=1)
-  else text(200, max(y), name, adj=c(0.5,1), cex=1.4)
+  else text(200, max(y), name, adj=c(0.5,1), cex=1.2)
 }
 
 plot_all_model_fits <- function(medium) {
@@ -991,9 +996,9 @@ plot_all_model_fits <- function(medium) {
                  "Hyperbolic"=hyperbolic_fit(medium),
                  "Logarithmic"=log_fit(medium),
                  "Power"=power_fit(medium),
-                 "Hyperbolic-power"=hyperbolic_power_fit(medium),
-                 "Log-normal-based"=lognorm_constrained_fit(medium),
-                 "Exponential-power"=exp_power_fit(medium),
+                 "Hyperbolic-\npower"=hyperbolic_power_fit(medium),
+                 "Log-normal-\nbased"=lognorm_constrained_fit(medium),
+                 "Exponential-\npower"=exp_power_fit(medium),
                  "Biexponential"=biexp_fit(medium),
                  "Bipower"=bipower_fit(medium)
                  )
@@ -1415,11 +1420,11 @@ print_model_description <- function(medium, depvar, ranks) {
 load_doc_length_regression_data <- function() {
   file <- sprintf('%s/RData/log_doc_length_ratios.RData', DATADIR)
   if (!file.exists(file)) {
-    # Note: this uses all non-Twitter documents, not only those from the news domains. Also,
-    # it uses only a set of 2638 people that were used in an early stage of the project
+    # Note: this uses all English non-Twitter documents, not only those from the 6608 Google News
+    # domains. Also, it uses only a set of 2638 people that were used in an early stage of the project
     # (meeting the criterion "min_num_active_days=50"), which are then reduced to the subset
-    # of 579 people that are also used in the main regression analysis about post-mortem mention
-    # frequency.
+    # of 579 people that are also present in the set of 870 people included in the main regression
+    # analysis about post-mortem mention frequency.
     doc_len_all <- read.table(pipe(sprintf('gunzip -c %s/mean_doc_length_per_day.tsv.gz', DATADIR)),
                               sep='\t', as.is=TRUE, col.names=c('mid', 'date', 'numWords'))
     ok_mids <- intersect(unique(doc_len_all$mid), unique(rownames(lmdata_N)))
@@ -1459,22 +1464,12 @@ plot_doc_length_increase <- function(regdata, predictors, ylab=NULL) {
   lo <- coefs[,1]-2*coefs[,2]
   hi <- coefs[,1]+2*coefs[,2]
 
-  # Natural deaths.
   plot(-100:N, exp(est)-1, type='l', lwd=2, col='#000000', bty='n', axes=FALSE,
        ylim=c(-0.7,0.7),xlab='Days since death', ylab=ylab,
        main='Mean relative document length increase', cex.main=1,
        panel.first=c(abline(v=0, h=0, col='gray'), #abline(v=c(30), col='red'),
                      polygon(x=c(-100:N, rev(-100:N)), y=c(lo, rev(hi)), col='#00000040', border=NA),
                      axis(1, at=seq(-90,360,30), las=2), axis(2)))
-
-  # Unnatural deaths.
-  # predictors <- 'mean_before_relrank + age_group + death_type + anglo'
-  # coefs <- do.call(rbind,
-  #                  lapply(-100:N,
-  #                         function(t) sum(summary(lm(as.formula(sprintf('`%s` ~ %s', t, predictors)),
-  #                                                regdata))$coefficients[c(1,10),1])))
-  # plot(-100:N, exp(coefs[,1])-1, type='l', lwd=2, col='#000000', bty='n', axes=FALSE, ylim=c(-0.7,0.7),
-  #      panel.first=c(abline(v=0, h=0, col='gray'), axis(1, at=seq(-90,360,30), las=2), axis(2)))
 }
 
 draw_mega_figure <- function() {
@@ -1710,29 +1705,68 @@ type2str <- tapply(tt$profession, tt$level1, function(s) paste(sort(s), collapse
 `r sprintf('* %s', paste(sprintf('__%s:__', names(type2str)), type2str, collapse='\n* '))`
 
 
-\ifshowall
 # Biographic statistics of public figures
 
-The first column represents the set of all `r nrow(stats_all)` Freebase people who died in the same time period studied (11 June 2009 to 30 September 2014).
-The second column represents the `r nrow(stats_N)` people studied.
-The third column represents the subset of the `r nrow(lmdata_N)` people included in the regression analysis.
+\begin{center}
+\begin{tabular}{lrrr}
+  \hline
+ & \textbf{All} & \textbf{Included} & \textbf{Regression} \\ 
+  \hline
+\textbf{Age} &  &  &  \\ 
+  \hspace{5mm} N/A & 10\% & 6\% & 0\% \\ 
+  \hspace{5mm} 1st quartile & 68 & 64 & 60 \\ 
+  \hspace{5mm} Mean & 76 & 74 & 70 \\ 
+  \hspace{5mm} Median & 80 & 77 & 73 \\ 
+  \hspace{5mm} 3rd quartile & 88 & 87 & 84 \\ 
+   \hline
+\textbf{Gender} &  &  &  \\ 
+  \hspace{5mm} N/A & 27\% & 7\% & 0\% \\ 
+  \hspace{5mm} Female & 16\% & 17\% & 17\% \\ 
+  \hspace{5mm} Male & 84\% & 83\% & 83\% \\ 
+   \hline
+\textbf{Manner of death} &  &  &  \\ 
+  \hspace{5mm} N/A & 76\% & 60\% & 0\% \\ 
+  \hspace{5mm} Natural & 85\% & 86\% & 88\% \\ 
+  \hspace{5mm} Unnatural & 15\% & 14\% & 12\% \\ 
+   \hline
+\textbf{Language} &  &  &  \\ 
+  \hspace{5mm} N/A & 45\% & 27\% & 14\% \\ 
+  \hspace{5mm} Anglophone & 60\% & 82\% & 80\% \\ 
+  \hspace{5mm} Non-anglophone & 40\% & 18\% & 20\% \\ 
+   \hline
+\textbf{Notability type} &  &  &  \\ 
+  \hspace{5mm} N/A & 1\% & 0\% & 0\% \\ 
+  \hspace{5mm} Arts & 40\% & 50\% & 56\% \\ 
+  \hspace{5mm} Sports & 14\% & 14\% & 14\% \\ 
+  \hspace{5mm} Leadership & 11\% & 14\% & 13\% \\ 
+  \hspace{5mm} Known for death & 26\% & 16\% & 10\% \\ 
+  \hspace{5mm} General fame & 7\% & 4\% & 5\% \\ 
+  \hspace{5mm} Academia/engineering & 2\% & 2\% & 2\% \\ 
+   \hline
+\textbf{Count} & 33\,340 & 2\,362 & 870 \\ 
+   \hline
+\end{tabular}
+\end{center}
 
-(A note on age: among all people in Freebase, there are some obvious age errors [e.g., 610 years]. Even when ignoring all ages above 120, the mean changes only slightly, dropping from 76.26 to 76.22.)
-
-```{r people description 1, echo=!SUPP_INFO}
+\ifshowall
+```{r people description 1, include=!SUPP_INFO}
 table <- make_bio_table()
 table
 ```
-`r tabcap(!SUPP_INFO)`
-Biographic statistics of public figures.
+\fi
+`r tabcap(TRUE)`
+__Biographic statistics of public figures.__
+_All_ refers to the 33\,340 individuals listed in the Freebase knowledge base as having died between 11 June 2009 and 30 September 2014.
+_Included_ refers to the 2\,362 individuals included in the study (exclusion was mostly due to below-threshold pre-mortem mention frequencies, cf. _Materials and Methods_ in the main paper).
+_Regression_ is a subset of _Included_ and refers to the 870 individuals included in the regression analysis (exclusion was due to unknown age, gender, or manner of death).
+_N/A_ refers to the percentage of individuals for whom the respective property was not available in Freebase.
+The remaining relative frequencies were computed based on the set of individuals for whom the property was available, so they sum to 100\%.
 
-```{r, echo=FALSE}
+```{r people description 2, echo=FALSE}
 print(xtable(table, caption='', label='tab:people stats', align='lrrr'),
       hline.after=c(-1,0,6,10,14,18,nrow(table)-1,nrow(table)),
       file=sprintf('%s/people_stats_table.tex', TABLEDIR), floating=FALSE)
 ```
-\fi
-
 
 \ifshowall
 # Examples of individual mention time series
@@ -1898,31 +1932,16 @@ coef(bipower_model_T)
 ```
 \fi
 
-# Proportion of cultural vs. communicative memory
 
-```{r plot_comm_vs_cult_mem, fig.width=9, fig.height=3, echo=if (!SUPP_INFO) -c(1,4) else FALSE}
-par(mfrow=c(1,2))
-plot_comm_vs_cult_mem('NEWS', coef(bipower_model_N), 'Bipower')
-plot_comm_vs_cult_mem('TWITTER', coef(bipower_model_T), 'Bipower')
-par(.default_par)
-```
-
-`r figcap(TRUE)`
-Proportion of cultural vs. communicative memory.
-On day $t$ after death, the total collective memory according to the bipower model fit is $S(t)=u(t)+v(t)$, where $u(t)$ is the communicative memory, and $v(t)$ is the cultural memory.
-We plot the proportion $v(t)/S(t)$ as a function of $t$.
-_Left:_ news. _Right:_ Twitter.
-
-
-# Alternative models
+# Model comparison
 
 __(a) News__
-```{r alternative_models_N, fig.width=5, fig.height=10, echo=!SUPP_INFO}
+```{r alternative_models_N, fig.width=3.5, fig.height=10, echo=!SUPP_INFO}
 plot_all_model_fits('NEWS')
 ```
 
 __(b) Twitter__
-```{r alternative_models_T, fig.width=5, fig.height=10, echo=!SUPP_INFO, warning=!SUPP_INFO}
+```{r alternative_models_T, fig.width=3.5, fig.height=10, echo=!SUPP_INFO, warning=!SUPP_INFO}
 plot_all_model_fits('TWITTER')
 ```
 
@@ -1970,6 +1989,46 @@ We quantify goodness of fit using two measures (results in the legends of the ri
 $R^2$ and AIC result in the same ordering of the eight models, and the ordering is identical across the two media (news and Twitter).
 In the figure, the models are sorted, top-down, in increasing order of goodness of fit.
 The bipower model provides the best fit according to both measures ($R^2$ and AIC) and for both media (news and Twitter), with $R^2=0.989$ for the news and $R^2=0.985$ for Twitter.
+
+
+# Proportion of cultural vs. communicative memory
+
+```{r plot_comm_vs_cult_mem, fig.width=9, fig.height=3, echo=if (!SUPP_INFO) -c(1,4) else FALSE}
+par(mfrow=c(1,2))
+plot_comm_vs_cult_mem('NEWS', coef(bipower_model_N), 'Bipower')
+plot_comm_vs_cult_mem('TWITTER', coef(bipower_model_T), 'Bipower')
+par(.default_par)
+```
+
+`r figcap(TRUE)`
+Proportion of cultural vs. communicative memory.
+On day $t$ after death, the total collective memory according to the bipower model fit is $S(t)=u(t)+v(t)$, where $u(t)$ is the communicative memory, and $v(t)$ is the cultural memory.
+We plot the proportion $v(t)/S(t)$ as a function of $t$.
+_Left:_ news. _Right:_ Twitter.
+
+
+# Document length
+
+```{r doc length, fig.width=10, fig.height=4, echo=if (!SUPP_INFO) -c(1) else FALSE}
+par(mfrow=c(1,2))
+regdata <- load_doc_length_regression_data()
+# Only constant, i.e., estimate mean (plus standard errors).
+plot_doc_length_increase(regdata, '1', 'Direct estimate')
+# Adjust for those predictors that were found to have a significant impact on short-term
+# post-mortem mention frequency in the news.
+# (All possible predictors: mean_before_relrank, age_group, death_type, gender, anglo, type_group.)
+plot_doc_length_increase(regdata, 'mean_before_relrank + age_group + death_type + anglo', 'Adjusted estimate')
+
+```
+`r figcap(TRUE)`
+Relative length increase of news documents that mention deceased public figures, with respect to the respective public figure's pre-mortem mean document length, as a function of days since death.
+All means in this analysis are geometric means.
+Error bars are 95% confidence intervals approximated as $\pm 2$ standard errors.
+__Left:__ Direct mean estimates of relative length increase.
+__Right:__ Estimates adjusted for population drift (since certain groups of people are more likely to be mentioned post-mortem than others). Each day $t$'s adjusted estimate was obtained from a separate linear regression model for day $t$ only, which included each person $i$ mentioned that day as a data point, with $\log(L_{it}/P_i)$ as the dependent variable (where $L_{it}$ is $i$'s mean document length on day $t$, and $P_i$ is $i$'s pre-mortem mean document length),
+and with independent variables defined by the predictors that were previously found to be significantly associated with short-term post-mortem mention frequency (language, pre-mortem mean mention frequency rank, manner of death, age group), such that estimates are for anglophones of median pre-mortem popularity who died an unnatural death at age 70--79 years.
+The adjusted estimate of the (geometric) mean relative length increase for day $t$ is then given by $e^{a_t}-1$, where $a_t$ is the intercept of the regression for day $t$.
+We see that, both with and without adjustment, the documents that mentioned a person on the day of their death were on average about 40% shorter than documents that mentioned the person before their death, and that the pre-mortem level is reached again after about one month.
 
 
 # Mention time series characteristics
@@ -2189,6 +2248,11 @@ Dependendent variables:
 * short-term boost (`peak_mean_boost`)
 * long-term boost (`perm_boost`)
 
+We report results for two variants of each model, which differ in the way dependent variables are treated. Model variants are marked via the "Transformation on dependent variable" descriptor in the header of each model. The two variants are the following:
+
+* `NONE`: dependent variables were used as-is. This variant is used in the main paper.
+* `RELATIVE RANKS`: dependent variables were transformed to relative ranks; i.e., they were rank-transformed and then shifted/scaled to the interval $[-0.5,0.5]$. This way, dependent variables need to be interpreted in relative terms: a value of 0 corresponds to the median, and positive [negative] values to ranks above [below] the median.
+
 ## Models without interactions
 
 ```{r run regressions, echo=!SUPP_INFO}
@@ -2214,7 +2278,7 @@ for (ranks in c(FALSE, TRUE)) {
 
 ## Models with "age by manner of death" interaction
 
-```{r run regression models with interactions, fig.width=10, fig.height=3, echo=if (!SUPP_INFO) -1 else FALSE}
+```{r run regression models with interactions, fig.width=10, fig.height=3, echo=if (!SUPP_INFO) -1 else FALSE, fig.keep=if (SUPP_INFO) "none" else "high"}
 for (ranks in c(FALSE, TRUE)) {
   for (medium in c('NEWS', 'TWITTER')) {
     mods <- run_regression_analysis_for_death_types(medium, ranks)
@@ -2253,7 +2317,7 @@ for (ranks in c(FALSE, TRUE)) {
 
 ## Models of news-vs.-Twitter boost difference for fixed person (with "age by manner of death" interaction)
 
-```{r regression N vs T, fig.width=10, fig.height=3, echo=!SUPP_INFO}
+```{r regression N vs T, fig.width=10, fig.height=3, echo=!SUPP_INFO, fig.keep=if (SUPP_INFO) "none" else "high"}
 for (ranks in c(FALSE, TRUE)) {
   mods <- run_regression_analysis_T_vs_N_for_death_types(ranks)
   # Short-term.
@@ -2271,29 +2335,46 @@ for (ranks in c(FALSE, TRUE)) {
 }
 ```
 
-# Document length
-
-```{r doc length, fig.width=10, fig.height=4, echo=if (!SUPP_INFO) -c(1) else FALSE}
-par(mfrow=c(1,2))
-regdata <- load_doc_length_regression_data()
-# Only constant, i.e., estimate mean (plus standard errors).
-plot_doc_length_increase(regdata, '1', 'Direct estimate')
-# Adjust for those predictors that were found to have a significant impact on short-term
-# post-mortem mention frequency in the news.
-# (All possible predictors: mean_before_relrank, age_group, death_type, gender, anglo, type_group.)
-plot_doc_length_increase(regdata, 'mean_before_relrank + age_group + death_type + anglo', 'Adjusted estimate')
-
-```
-`r figcap(TRUE)`
-Relative length increase of news documents that mention deceased public figures, with respect to the respective public figure's pre-mortem mean document length, as a function of days since death.
-All means in this analysis are geometric means.
-Error bars are 95% confidence intervals approximated as $\pm 2$ standard errors.
-__Left:__ Direct mean estimates of relative length increase.
-__Right:__ Estimates adjusted for population drift (since certain groups of people are more likely to be mentioned post-mortem than others). Each day $t$'s adjusted estimate was obtained from a separate linear regression model for day $t$ only, which included each person $i$ mentioned that day as a data point, with $\log(L_{it}/P_i)$ as the dependent variable (where $L_{it}$ is $i$'s mean document length on day $t$, and $P_i$ is $i$'s pre-mortem mean document length),
-and with independent variables defined by the predictors that were previously found to be significantly associated with short-term post-mortem mention frequency (language, pre-mortem mean mention frequency rank, manner of death, age group), such that estimates are for anglophones of median pre-mortem popularity who died an unnatural death at age 70--79 years.
-The adjusted estimate of the (geometric) mean relative length increase for day $t$ is then given by $e^{a_t}-1$, where $a_t$ is the intercept of the regression for day $t$.
-We see that, both with and without adjustment, the documents that mentioned a person on the day of their death were on average about 40% shorter than documents that mentioned the person before their death, and that the pre-mortem level is reached again after about one month.
 
 ```{r mega figure, fig.width=10, fig.height=10, include=FALSE}
 draw_mega_figure()
 ```
+
+# Comprehensiveness of Spinn3r
+
+Although Spinn3r does not publicly disclose its data collection strategy, we confirm the comprehensiveness of the corpus as follows.
+The news portion of the Spinn3r corpus contains documents from each of the 6\,608 English-language news domains identified externally via Google News, which hints at Spinn3r's completeness with respect to the entirety of online news.
+Moreover, in each of the four years (2010--2013) that are covered in their entirety by our study period, the average daily number of English tweets in the Spinn3r corpus amounts to 8--19\% of Twitter's full tweet volume across all languages.$^1$
+With English tweets estimated to have accounted for 53\% of all tweets in 2010$^2$ and 34\% in 2013$^3$, we estimate that the Spinn3r corpus contains about one third of all English tweets, as summarized in the following table:
+
+\begin{center}
+\begin{tabular}{r|r|r|r|r}
+        & Full Twitter     & Spinn3r           & Full Twitter    & Completeness\\
+Year    & All tweets$^1$   & English tweets    & English tweets$^{2,3}$ & English tweets\\
+\hline
+2010 & 35 million/day     &  6.7 million/day & 19 million/day & 36\% \\
+2011 & 200 million/day     &  20 million/day &  &  \\
+2012 & 340 million/day     &  28 million/day &  &  \\
+2013 & 500 million/day     &  51 million/day & 170 million/day  & 30\% \\
+\hline
+\end{tabular}
+\end{center}
+
+\ifshowall
+<table border="1">
+<tr><td>Year    </td><td> Full Twitter<br/>All tweets$^1$   </td><td> Spinn3r<br/>English tweets    </td><td> Full Twitter<br/>English tweets$^{2,3}$ </td><td> Completeness<br/>English tweets</td></tr>
+<tr><td>2010 </td><td> 35 million/day     </td><td>  6.7 million/day </td><td> 19 million/day </td><td> 36% </td></tr>
+<tr><td>2011 </td><td> 200 million/day     </td><td>  20 million/day </td><td>  </td><td>  </td></tr>
+<tr><td>2012 </td><td> 340 million/day     </td><td>  28 million/day </td><td>  </td><td>  </td></tr>
+<tr><td>2013 </td><td> 500 million/day     </td><td>  51 million/day </td><td> 170 million/day  </td><td> 30% </td></tr>
+</table>
+<br/>
+\fi
+`r tabcap(TRUE)`
+Completeness estimation of the English-language portion of the Spinn3r corpus, with respect to the entirety of English-language tweets on full Twitter.
+
+$^1$ https://www.internetlivestats.com/twitter-statistics/
+
+$^2$ B. Poblete, R. Garcia, M. Mendoza, A. Jaimes. Do all birds tweet the same? Characterizing Twitter around the world. In _Proceedings of the 20th ACM International Conference on Information and Knowledge Management_. pp. 1025--1030 (2011).
+
+$^3$ http://www.statista.com/statistics/267129/most-used-languages-on-twitter/
