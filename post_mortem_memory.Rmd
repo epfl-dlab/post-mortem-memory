@@ -838,6 +838,30 @@ bipower_fit <- function(medium) {
   return(model)
 }
 
+
+#################################
+simple_fit <- function(medium) {
+  df <- make_df_for_fit(medium)
+  
+  # First approximation: r = 0.
+  # log(y) ~ log(N*t^-p) = log(N)-p*log(t)
+  model0 <- lm(log(y) ~ log(t), data=df)
+  # model0 <- lm(log(y) ~ t, data=df)
+  N0 <- exp(coef(model0)[1])
+  p0 <- -coef(model0)[2]
+
+  # Second approximation: q = 0.
+  model <- nls(log(y) ~ log( N*t^-(p+s*log(t)) + r ), start=list(p=p0, N=N0, r=0, s=0),
+  # model <- nls(log(y) ~ log( N*t^-p + r ), start=list(p=p0, N=N0, r=0),
+  # model <- nls(log(y) ~ log( N*exp(-p*t) + r ), start=list(p=p0, N=N0, r=0),
+                data=df, control=list(maxiter=1e8), algorithm='port')
+  plot(df$t, df$y, log='xy'); lines(df$t, exp(predict(model)), col='green')
+  AIC(model); cor(log(df$y), predict(model))^2
+  return(model)
+}
+#################################
+
+
 power_fit <- function(medium) {
   df <- make_df_for_fit(medium)
   # log(y) ~ a + b*log(t)
