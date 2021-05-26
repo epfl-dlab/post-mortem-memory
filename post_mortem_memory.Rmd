@@ -3,9 +3,9 @@ title: "Post-mortem memory of public figures in news and social media"
 author: "Robert West, Jure Leskovec, Christopher Potts"
 date: ""
 output:
-  html_document: default
   pdf_document:
     keep_tex: true
+  html_document: default
 ---
 
 ```{r include=FALSE}
@@ -13,7 +13,7 @@ output:
 SAVE_PLOTS <- FALSE
 
 # Begin of nasty trick from here: https://stackoverflow.com/a/46686678
-SUPP_INFO <- FALSE
+SUPP_INFO <- TRUE
 INCLUDE_REGRESSION_IN_SUPP_INFO <- TRUE
 ```
 \newif\ifshowall
@@ -838,29 +838,19 @@ bipower_fit <- function(medium) {
   return(model)
 }
 
-
-#################################
-simple_fit <- function(medium) {
+shifted_power_fit <- function(medium) {
   df <- make_df_for_fit(medium)
   
   # First approximation: r = 0.
-  # log(y) ~ log(N*t^-p) = log(N)-p*log(t)
   model0 <- lm(log(y) ~ log(t), data=df)
-  # model0 <- lm(log(y) ~ t, data=df)
   N0 <- exp(coef(model0)[1])
   p0 <- -coef(model0)[2]
 
-  # Second approximation: q = 0.
-  model <- nls(log(y) ~ log( N*t^-(p+s*log(t)) + r ), start=list(p=p0, N=N0, r=0, s=0),
-  # model <- nls(log(y) ~ log( N*t^-p + r ), start=list(p=p0, N=N0, r=0),
-  # model <- nls(log(y) ~ log( N*exp(-p*t) + r ), start=list(p=p0, N=N0, r=0),
-                data=df, control=list(maxiter=1e8), algorithm='port')
-  plot(df$t, df$y, log='xy'); lines(df$t, exp(predict(model)), col='green')
-  AIC(model); cor(log(df$y), predict(model))^2
+  # Full model.
+  model <- nls(log(y) ~ log( N*t^-p + r ), start=list(p=p0, N=N0, r=0),
+               data=df, control=list(maxiter=1e8), algorithm='port')
   return(model)
 }
-#################################
-
 
 power_fit <- function(medium) {
   df <- make_df_for_fit(medium)
@@ -951,11 +941,19 @@ plot_avg_fraction_of_mentioning_docs <- function(medium, model=NULL, model_type=
     if (model_type == 'Biexponential') {
       mem_comm <- N * exp(-(p+r)*t)
       mem_cult <- N/(p-q+r)*r * (exp(-q*t) - exp(-(p+r)*t))
+      legend <- c('Biexponential fit S(t) = u(t) + v(t)', 'Communicative memory u(t)', 'Cultural memory v(t)')
     } else if (model_type == 'Bipower') {
       mem_comm <- N * t^-(p+r)
       mem_cult <- N/(p-q+r)*r * (t^-q - t^-(p+r))
+      legend <- c('Bipower fit S(t) = u(t) + v(t)', 'Communicative memory u(t)', 'Cultural memory v(t)')
+    } else if (model_type == 'Shifted power') {
+      mem_comm <- N * t^-p
+      mem_cult <- rep(r, length(t))
+      legend <- c('Shifted power law S(t) = u(t) + v(t)',
+                  expression(paste('Communicative memory u(t) = ', a * t^{-b})),
+                  'Cultural memory v(t) = c')
     } else {
-      stop("model_type must be 'biexp' or 'bipower'!")
+      stop("Invalid model type")
     }
     mem <- mem_comm + mem_cult
     
@@ -964,8 +962,7 @@ plot_avg_fraction_of_mentioning_docs <- function(medium, model=NULL, model_type=
     lines(t, log10(mem), lty=1, lwd=2, col='black')
 
     legend('topright', bty='n',
-           legend=c('Daily average', sprintf('%s fit S(t) = u(t) + v(t)', model_type),
-                    'Communicative memory u(t)', 'Cultural memory v(t)'),
+           legend=c('Daily average', legend),
            seg.len=3,
            pch=c(1,NA,NA,NA),
            lty=c(0,1,1,1), #lty=c(0,1,4,2),
@@ -1024,11 +1021,12 @@ plot_all_model_fits <- function(medium) {
                  "Log-normal-\nbased"=lognorm_constrained_fit(medium),
                  "Exponential-\npower"=exp_power_fit(medium),
                  "Biexponential"=biexp_fit(medium),
-                 "Bipower"=bipower_fit(medium)
+                 "Bipower"=bipower_fit(medium),
+                 "Shifted power"=shifted_power_fit(medium)
                  )
   if (SAVE_PLOTS) pdf(sprintf('%s/all_model_fits_%s.pdf', PLOTDIR, medium),
                       width=3.5, height=9, pointsize=8, family='Helvetica', useDingbats=FALSE)
-  par(mfcol=c(9,2))
+  par(mfcol=c(10,2))
   for (log in c('', 'x')) {
     for (name in names(models)) {
       model <- models[[name]]
@@ -1061,8 +1059,11 @@ plot_comm_vs_cult_mem <- function(medium, coefs, model_type) {
   } else if (model_type == 'Bipower') {
     u <- function(t, N, p, r, q) N * t^-(p+r)
     v <- function(t, N, p, r, q) N/(p-q+r)*r * (t^-q - t^-(p+r))
+  } else if (model_type == 'Shifted power') {
+    u <- function(t, N, p, r, q) N * t^-p
+    v <- function(t, N, p, r, q) r
   } else {
-    stop("model_type must be 'biexp' or 'bipower'!")
+    stop("Invalid model type")
   }
   mem_comm <- u(t, N, p, r, q)
   mem_cult <- v(t, N, p, r, q)
@@ -1920,20 +1921,20 @@ __Twitter:__
 # Average mention time series
 
 ```{r, echo=!SUPP_INFO}
-bipower_model_N <- bipower_fit('NEWS')
-bipower_model_T <- bipower_fit('TWITTER')
+shifted_power_model_N <- shifted_power_fit('NEWS')
+shifted_power_model_T <- shifted_power_fit('TWITTER')
 ```
 
 `r '__(a) News__'`
 
 ```{r, fig.width=6, fig.height=5, echo=!SUPP_INFO}
-plot_avg_fraction_of_mentioning_docs('NEWS', bipower_model_N, 'Bipower')
+plot_avg_fraction_of_mentioning_docs('NEWS', shifted_power_model_N, 'Shifted power')
 ```
 
 `r '__(b) Twitter__'`
 
 ```{r, fig.width=6, fig.height=5, echo=!SUPP_INFO}
-plot_avg_fraction_of_mentioning_docs('TWITTER', bipower_model_T, 'Bipower')
+plot_avg_fraction_of_mentioning_docs('TWITTER', shifted_power_model_T, 'Shifted power')
 ```
 
 `r figcap(!SUPP_INFO)`
@@ -1941,18 +1942,18 @@ Average mention time series, obtained via the arithmetic mean of the individual 
 for __(a)__ news and __(b)__ Twitter.
 
 
-## Bipower model parameters
+## Shifted power law parameters
 
 News:
 
 ```{r, echo=!SUPP_INFO}
-coef(bipower_model_N)
+coef(shifted_power_model_N)
 ```
 
 Twitter:
 
 ```{r, echo=!SUPP_INFO}
-coef(bipower_model_T)
+coef(shifted_power_model_T)
 ```
 \fi
 
@@ -1970,14 +1971,21 @@ plot_all_model_fits('TWITTER')
 ```
 
 `r figcap(TRUE)`
-Comparison of nine models $S(t)$ for fitting empirical mention frequencies, for __(a)__ the news and __(b)__ Twitter.
+Comparison of 10 models $S(t)$ for fitting empirical mention frequencies, for __(a)__ the news and __(b)__ Twitter.
 All $y$-axes are logarithmic.
 The left and right plots in each row show the same fits, the only difference being that the left plots have linear $x$-axes, whereas the right plots have logarithmic $x$-axes.
-Fits are nonlinear least-squares fits obtained in log space, i.e., logarithms were taken of both the empirical data and the model $S(t)$ before performing the least-squares optimization (see equation (6) in the paper for the case of the bipower model).
-The bipower function is defined in equation (4) of the paper.
+Fits are nonlinear least-squares fits obtained in log space, i.e., logarithms were taken of both the empirical data and the model $S(t)$ before performing the least-squares optimization (see equation 1 in the paper for the case of the shifted power function).
 The biexponential function was introduced by Candia et al. ("The universal decay of collective memory and attention." _Nature Human Behaviour_. 2019; 3(1):82-91) and is parameterized by $N,p,q,r>0$, as follows:
 
 * Biexponential: $S(t) = \frac{N}{p+r-q} \left(  (p-q) e^{-(p+r)t} + re^{-qt} \right)$.
+
+Based on the biexponential function, we define the (novel) bipower function by replacing exponentials with powers:
+
+* Bipower: $S(t) = \frac{N}{p+r-q} \left(  (p-q) t^{-(p+r)} + rt^{-q} \right)$.
+
+By setting $q=0$, $a=\frac{Np}{p+r}$, $b=p+r$, and $c=r$, we obtain the shifted power function as a special case of the bipower function:
+
+* Shifted power: $S(t) = a t^{-b} + c$.
 
 Theoretical motivations for six of the seven remaining functions are given by Rubin and Wenzel ("One hundred years of forgetting: A quantitative description of retention." _Psychological Review_. 1996; 103(4):734-760).
 Four of these functions are parameterized by two parameters $a,b>0$, as follows:
@@ -2010,23 +2018,24 @@ Since the unconstrained function, when fitted to the empirical data, assumes a m
 We quantify goodness of fit using two measures (results in the legends of the right plots):
 (1) via coefficients of determination ($R^2$; computed as the squared correlation between observed and predicted values on the log scale; larger is better);
 (2) in order to account for the varying model complexity (the models have between two and four parameters), via Akaike's information criterion (AIC; smaller is better).
-$R^2$ and AIC result in the same ordering of the eight models, and the ordering is identical across the two media (news and Twitter).
+$R^2$ and AIC result in the same ordering of the 10 models, and the ordering is identical across the two media (news and Twitter).
 In the figure, the models are sorted, top-down, in increasing order of goodness of fit.
-The bipower model provides the best fit according to both measures ($R^2$ and AIC) and for both media (news and Twitter), with $R^2=0.989$ for the news and $R^2=0.985$ for Twitter.
+The shifted power model provides the best fit according to both measures ($R^2$ and AIC) and for both media (news and Twitter), with $R^2=0.989$ for the news and $R^2=0.985$ for Twitter.
+The bipower model yields essentially the same fit as the shifted power model, which, as mentioned above, is a special case of the bipower model with $q=0$ fixed (optimal bipower fit: $q=0.0068$ for the news, $q=0$ for Twitter).
 
 
 # Proportion of cultural vs. communicative memory
 
 ```{r plot_comm_vs_cult_mem, fig.width=9, fig.height=3, echo=if (!SUPP_INFO) -c(1,4) else FALSE}
 par(mfrow=c(1,2))
-plot_comm_vs_cult_mem('NEWS', coef(bipower_model_N), 'Bipower')
-plot_comm_vs_cult_mem('TWITTER', coef(bipower_model_T), 'Bipower')
+plot_comm_vs_cult_mem('NEWS', coef(shifted_power_model_N), 'Shifted power')
+plot_comm_vs_cult_mem('TWITTER', coef(shifted_power_model_T), 'Shifted power')
 par(.default_par)
 ```
 
 `r figcap(TRUE)`
 Proportion of cultural vs. communicative memory.
-On day $t$ after death, the total collective memory according to the bipower model fit is $S(t)=u(t)+v(t)$, where $u(t)$ is the communicative memory, and $v(t)$ is the cultural memory.
+On day $t$ after death, the total collective memory according to the shifted power law fit is $S(t)=u(t)+v(t)$, where $u(t)=at^{-b}$ is the communicative memory, and $v(t)=c$ is the cultural memory.
 We plot the proportion $v(t)/S(t)$ as a function of $t$.
 _Left:_ news. _Right:_ Twitter.
 
