@@ -4,7 +4,7 @@ author: "Robert West, Jure Leskovec, Christopher Potts"
 date: ""
 output:
   pdf_document:
-    keep_tex: true
+    keep_tex: false
   html_document: default
 ---
 
@@ -905,7 +905,7 @@ hyperbolic_power_fit <- function(medium) {
 }
 
 plot_avg_fraction_of_mentioning_docs <- function(medium, model=NULL, model_type=NULL) {
-  if (SAVE_PLOTS) pdf(sprintf('%s/avg_mention_curve_%s.pdf', PLOTDIR, medium), width=3.4, height=3.4,
+  if (SAVE_PLOTS) pdf(sprintf('%s/avg_mention_curve_%s.pdf', PLOTDIR, medium), width=4.4, height=3.4,
                       pointsize=8, family='Helvetica', useDingbats=FALSE)
   par(mar=c(3,3,1,1))
   if (medium == 'NEWS') {
@@ -924,11 +924,11 @@ plot_avg_fraction_of_mentioning_docs <- function(medium, model=NULL, model_type=
   par(fig=c(0, 1, 0, 1))
   plot(days, y, type='p', bty='n', lwd=2, xlab='', ylab='', #xaxt='n', yaxt='n',
        panel.first=abline(v=0, col='gray', lwd=1, lty=2), col=COL[[medium]], las=0)
-  mtext('Days since death', side=1, line=2)
-  mtext('Fraction mentioning documents [log10]', side=2, line=2)
+  mtext(expression(paste('Day ', italic(t), ' since death')), side=1, line=2)
+  mtext(expression(paste(Log[10], ' of fraction ', italic(S),'(',italic(t),')', ' of mentioning documents')), side=2, line=2)
   y365 <- y['365']
   arrows(x0=325, x1=355, y0=y365, y1=y365, length=0.05)
-  text(325, y365, '365 days', adj=c(1.1, 0.5))
+  text(325, y365, 'Day 365', adj=c(1.1, 0.5))
 
   if (!is.null(model)) {
     coefs <- coef(model)
@@ -941,17 +941,21 @@ plot_avg_fraction_of_mentioning_docs <- function(medium, model=NULL, model_type=
     if (model_type == 'Biexponential') {
       mem_comm <- N * exp(-(p+r)*t)
       mem_cult <- N/(p-q+r)*r * (exp(-q*t) - exp(-(p+r)*t))
-      legend <- c('Biexponential fit S(t) = u(t) + v(t)', 'Communicative memory u(t)', 'Cultural memory v(t)')
+      legend <- c(expression(paste('Biexponential fit ', italic(S), '(',italic(t),') = ', italic(u), '(',italic(t),') + ', italic(v), '(',italic(t),')')),
+                  expression(paste('Communicative memory ', italic(u), '(',italic(t),')')),
+                  expression(paste('Cultural memory ', italic(v), '(',italic(t),')')))
     } else if (model_type == 'Bipower') {
       mem_comm <- N * t^-(p+r)
       mem_cult <- N/(p-q+r)*r * (t^-q - t^-(p+r))
-      legend <- c('Bipower fit S(t) = u(t) + v(t)', 'Communicative memory u(t)', 'Cultural memory v(t)')
+      legend <- c(expression(paste('Bipower fit ', italic(S), '(',italic(t),') = ', italic(u), '(',italic(t),') + ', italic(v), '(',italic(t),')')),
+                  expression(paste('Communicative memory ', italic(u), '(',italic(t),')')),
+                  expression(paste('Cultural memory ', italic(v), '(',italic(t),')')))
     } else if (model_type == 'Shifted power') {
       mem_comm <- N * t^-p
       mem_cult <- rep(r, length(t))
-      legend <- c('Shifted power law S(t) = u(t) + v(t)',
-                  expression(paste('Communicative memory u(t) = ', a * t^{-b})),
-                  'Cultural memory v(t) = c')
+      legend <- c(expression(paste('Shifted power law ', italic(S), '(',italic(t),') = ', italic(u), '(',italic(t),') + ', italic(v), '(',italic(t),')')),
+                  expression(paste('Communicative memory ', italic(u), '(',italic(t),') = ', italic(a)*italic(t)^{-italic(b)})),
+                  expression(paste('Cultural memory ', italic(v), '(',italic(t),') = ', italic(c))))
     } else {
       stop("Invalid model type")
     }
@@ -977,13 +981,13 @@ plot_avg_fraction_of_mentioning_docs <- function(medium, model=NULL, model_type=
     lines(t, log10(mem_comm), lty=1, lwd=2, col=COL_GREEN)
     lines(t, log10(mem_cult), lty=1, lwd=2, col=COL_RED)
     lines(t, log10(mem), lty=1, lwd=2, col='black')
-    legend('topright', bty='n', legend='Log x-scale', inset=c(0.1,0.2))
+    legend('topright', bty='n', legend=expression(paste('Log ', italic(x), '-scale')), inset=c(0.1,0.2))
   }
 
   if (SAVE_PLOTS) dev.off()
 }
 
-plot_model_fit <- function(medium, name, model, predict, log='') {
+plot_model_fit <- function(medium, name, model, predict, log='', mar=c(3,3,1,1)) {
   if (medium == 'NEWS') {
     x <- x_N
   } else if (medium == 'TWITTER') {
@@ -997,8 +1001,8 @@ plot_model_fit <- function(medium, name, model, predict, log='') {
   y <- log10(df$y)
   yhat <- log10(predict)
   
-  par(mar=c(3,3,1,1))
-  plot(t, y, type='p', bty='n', lwd=2, xlab='', ylab='', col=COL[[medium]], las=0, log=log)
+  par(mar=mar)
+  plot(t, y, type='p', bty='n', lwd=2, xlab='', ylab='', las=0, log=log, col=COL[[medium]])
   mtext('Days since death', side=1, line=2, cex=0.6)
   mtext('Mention freq. [log10]', side=2, line=2, cex=0.6)
   lines(t, yhat, lwd=2)
@@ -1025,14 +1029,18 @@ plot_all_model_fits <- function(medium) {
                  "Shifted power"=shifted_power_fit(medium)
                  )
   if (SAVE_PLOTS) pdf(sprintf('%s/all_model_fits_%s.pdf', PLOTDIR, medium),
-                      width=3.5, height=9, pointsize=8, family='Helvetica', useDingbats=FALSE)
-  par(mfcol=c(10,2))
-  for (log in c('', 'x')) {
-    for (name in names(models)) {
-      model <- models[[name]]
-      plot_model_fit(medium, name, model, exp(predict(model)), log=log)
+                      width=6, height=5, pointsize=8, family='Helvetica', useDingbats=FALSE)
+  par(mfcol=c(5,4))
+  for (batch in 0:1) {
+    for (log in c('', 'x')) {
+      for (name in names(models[batch*5+(1:5)])) {
+        plot_model_fit(medium, name, models[[name]], exp(predict(models[[name]])), log=log, mar=c(3,4,1.5,1))
+      }
     }
   }
+  par(.default_par)
+  # par(fig=c(0,1,0,1), new=TRUE, mar=c(0,0,0,0), xpd=NA, mgp=c(0,0,0))
+  segments(0.48, 0, 0.48, 1, col='gray', lwd=2)
   if (SAVE_PLOTS) dev.off()
 }
 
@@ -1957,23 +1965,28 @@ coef(shifted_power_model_T)
 ```
 \fi
 
+\newpage
 
 # Model comparison
 
 __(a) News__
-```{r alternative_models_N, fig.width=3.5, fig.height=10, echo=!SUPP_INFO}
+
+```{r alternative_models_N, fig.width=8, fig.height=8, echo=!SUPP_INFO}
 plot_all_model_fits('NEWS')
 ```
 
+\newpage
+
 __(b) Twitter__
-```{r alternative_models_T, fig.width=3.5, fig.height=10, echo=!SUPP_INFO, warning=!SUPP_INFO}
+
+```{r alternative_models_T, fig.width=8, fig.height=8, echo=!SUPP_INFO, warning=!SUPP_INFO}
 plot_all_model_fits('TWITTER')
 ```
 
 `r figcap(TRUE)`
-Comparison of 10 models $S(t)$ for fitting empirical mention frequencies, for __(a)__ the news and __(b)__ Twitter.
+Comparison of ten models $S(t)$ for fitting empirical mention frequencies, for __(a)__ the news and __(b)__ Twitter.
 All $y$-axes are logarithmic.
-The left and right plots in each row show the same fits, the only difference being that the left plots have linear $x$-axes, whereas the right plots have logarithmic $x$-axes.
+The left and right plots in each pair show the same fits, the only difference being that the left plots have linear $x$-axes, whereas the right plots have logarithmic $x$-axes.
 Fits are nonlinear least-squares fits obtained in log space, i.e., logarithms were taken of both the empirical data and the model $S(t)$ before performing the least-squares optimization (see equation 1 in the paper for the case of the shifted power function).
 The biexponential function was introduced by Candia et al. ("The universal decay of collective memory and attention." _Nature Human Behaviour_. 2019; 3(1):82-91) and is parameterized by $N,p,q,r>0$, as follows:
 
@@ -1983,7 +1996,7 @@ Based on the biexponential function, we define the (novel) bipower function by r
 
 * Bipower: $S(t) = \frac{N}{p+r-q} \left(  (p-q) t^{-(p+r)} + rt^{-q} \right)$.
 
-By setting $q=0$, $a=\frac{Np}{p+r}$, $b=p+r$, and $c=r$, we obtain the shifted power function as a special case of the bipower function:
+By fixing $q=0$ and defining $a=\frac{Np}{p+r}$, $b=p+r$, and $c=\frac{Nr}{p+r}$, we obtain the shifted power function as a special case of the bipower function:
 
 * Shifted power: $S(t) = a t^{-b} + c$.
 
@@ -2054,14 +2067,14 @@ plot_doc_length_increase(regdata, 'mean_before_relrank + age_group + death_type 
 
 ```
 `r figcap(TRUE)`
-Relative length increase of news documents that mention deceased public figures, with respect to the respective public figure's pre-mortem mean document length, as a function of days since death.
+Relative length increase of documents that mention deceased public figures (excluding Twitter posts), with respect to the respective public figure's pre-mortem mean document length, as a function of days since death.
 All means in this analysis are geometric means.
 Error bars are 95% confidence intervals approximated as $\pm 2$ standard errors.
 __Left:__ Direct mean estimates of relative length increase.
 __Right:__ Estimates adjusted for population drift (since certain groups of people are more likely to be mentioned post-mortem than others). Each day $t$'s adjusted estimate was obtained from a separate linear regression model for day $t$ only, which included each person $i$ mentioned that day as a data point, with $\log(L_{it}/P_i)$ as the dependent variable (where $L_{it}$ is $i$'s mean document length on day $t$, and $P_i$ is $i$'s pre-mortem mean document length),
 and with independent variables defined by the predictors that were previously found to be significantly associated with short-term post-mortem mention frequency (language, pre-mortem mean mention frequency rank, manner of death, age group), such that estimates are for anglophones of median pre-mortem popularity who died an unnatural death at age 70--79 years.
 The adjusted estimate of the (geometric) mean relative length increase for day $t$ is then given by $e^{a_t}-1$, where $a_t$ is the intercept of the regression for day $t$.
-We see that, both with and without adjustment, the documents that mentioned a person on the day of their death were on average about 40% shorter than documents that mentioned the person before their death, and that the pre-mortem level is reached again after about one month.
+We see that, both with and without adjustment, the documents that mentioned a person on the day of their death were on average about 40% shorter than documents that mentioned the person before their death, and that the pre-mortem level is reached again (and then surpassed) after about one month.
 
 
 # Mention time series characteristics
