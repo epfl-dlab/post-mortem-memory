@@ -1033,8 +1033,10 @@ plot_all_model_fits <- function(medium) {
   par(mfcol=c(5,4))
   for (batch in 0:1) {
     for (log in c('', 'x')) {
-      for (name in names(models[batch*5+(1:5)])) {
-        plot_model_fit(medium, name, models[[name]], exp(predict(models[[name]])), log=log, mar=c(3,4,1.5,1))
+      for (i in batch*5+(1:5)) {
+        name <- names(models)[i]
+        plot_model_fit(medium, sprintf('(%d) %s', i, name), models[[name]], exp(predict(models[[name]])),
+                       log=log, mar=c(3,4,1.5,1))
       }
     }
   }
@@ -1083,14 +1085,15 @@ plot_comm_vs_cult_mem <- function(medium, coefs, model_type) {
   percs <- c(0.25, 0.5, 0.75)
   cols <- c('black', COL_MAGENTA, COL_LIGHTBLUE)
   for (i in 1:length(percs)) {
-    perc <- percs[i]
-    col <- cols[i]
-    idx <- min(which(ratio>=perc))
-    points(t[idx], ratio[idx], lwd=3, pch=20, col=col, cex=2)
-    segments(-5, ratio[idx], t[idx], ratio[idx], col=col, lty=2)
-    segments(t[idx], -5, t[idx], ratio[idx], col=col, lty=2)
-    text(t[idx], ratio[idx], adj=c(-0.1, 0.5), col=col,
-         labels=sprintf('%.0f%% after %.0f days', 100*perc, ceiling(t[idx])))
+    idx <- min(which(ratio>=percs[i]))
+    points(t[idx], ratio[idx], lwd=3, pch=20, col=cols[i], cex=2)
+    segments(-5, ratio[idx], t[idx], ratio[idx], col=cols[i], lty=2)
+    segments(t[idx], -5, t[idx], ratio[idx], col=cols[i], lty=2)
+  }
+  for (i in 1:length(percs)) {
+    idx <- min(which(ratio>=percs[i]))
+    text(t[idx], ratio[idx], adj=c(-0.1, 0.5), col=cols[i],
+         labels=sprintf('%.0f%% after %.0f days', 100*percs[i], ceiling(t[idx])))
   }
   if (SAVE_PLOTS) dev.off()
 }
@@ -2032,7 +2035,7 @@ We quantify goodness of fit using two measures (results in the legends of the ri
 (1) via coefficients of determination ($R^2$; computed as the squared correlation between observed and predicted values on the log scale; larger is better);
 (2) in order to account for the varying model complexity (the models have between two and four parameters), via Akaike's information criterion (AIC; smaller is better).
 $R^2$ and AIC result in the same ordering of the 10 models, and the ordering is identical across the two media (news and Twitter).
-In the figure, the models are sorted, top-down, in increasing order of goodness of fit.
+In the figure, the models are numbered in increasing order of goodness of fit.
 The shifted power model provides the best fit according to both measures ($R^2$ and AIC) and for both media (news and Twitter), with $R^2=0.989$ for the news and $R^2=0.985$ for Twitter.
 The bipower model yields essentially the same fit as the shifted power model, which, as mentioned above, is a special case of the bipower model with $q=0$ fixed (optimal bipower fit: $q=0.0068$ for the news, $q=0$ for Twitter).
 
@@ -2169,7 +2172,7 @@ __(b) Twitter__
 plot_chars_by_group(stats_T, 'TWITTER', stats_T$type_group, type_groups)
 ```
 `r figcap(TRUE)`
-Distributions of mention time series characteristics by notability type, visualized as box plots, for __(a)__ the news and __(b)__ Twitter.
+Distributions of mention time series characteristics (rank-transformed and scaled to the interval $[0,1]$) by notability type, visualized as box plots, for __(a)__ the news and __(b)__ Twitter.
 Boxes are bounded by the first and third quartiles; whiskers extend 1.5 inter-quartile ranges beyond the first and third quartiles (or to the minimum/maximum in case they fall within 1.5 inter-quartile ranges); the center bars mark medians, with notches corresponding to 95% confidence intervals of the median.
 
 
