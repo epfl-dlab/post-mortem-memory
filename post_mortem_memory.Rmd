@@ -696,7 +696,7 @@ plot_time_series_for_small_multiples <- function(name, medium, X, x, num_art,
   plot(-100:360, raw, col=COL_LIGHT[[medium]],
        bty='n', xlab='', xlim=c(-100,360), ylim=c(ymin,-1), ylab='',
        panel.first=abline(v=0, col='gray'))
-  text(360, -1, sprintf('%s', gsub('_', ' ', name)), adj=c(1,1), cex=1)
+  text(360, -1, sprintf('%s\n(%s)', gsub('_', ' ', name), medium), adj=c(1,1), cex=1)
   lines(names(smoothed), smoothed, col=COL[[medium]], lwd=2)
   if (xlab) mtext('Days since death', side=1, line=2)
   if (ylab) mtext('Fraction mentioning docs [log10]', side=2, line=2)
@@ -966,7 +966,7 @@ plot_avg_fraction_of_mentioning_docs <- function(medium, model=NULL, model_type=
     lines(t, log10(mem), lty=1, lwd=2, col='black')
 
     legend('topright', bty='n',
-           legend=c('Daily average', legend),
+           legend=c(sprintf('Daily average (%s)', medium), legend),
            seg.len=3,
            pch=c(1,NA,NA,NA),
            lty=c(0,1,1,1), #lty=c(0,1,4,2),
@@ -1379,19 +1379,19 @@ plot_age_coeffs_for_death_types <- function(mod, medium, outcome, base_age, rank
   col_unnat <- 'gray'
   suffix <- if (ranks) '_relrank' else ''
   if (outcome == 'peak_mean_boost') {
-    main <- sprintf('Short-term boost', medium)
+    main <- sprintf('Short-term boost (%s)', medium)
     xlab <- 'Average boost'
     outfile <- sprintf('%s/age_coefs_%s_%s%s.pdf', PLOTDIR, medium, outcome, suffix)
   } else if (outcome == 'perm_boost') {
-    main <- sprintf('Long-term boost', medium)
+    main <- sprintf('Long-term boost (%s)', medium)
     xlab <- 'Average boost'
     outfile <- sprintf('%s/age_coefs_%s_%s%s.pdf', PLOTDIR, medium, outcome, suffix)
   } else if (outcome == 'peak_mean_boost_diff') {
-    main <- 'Short-term boost'
+    main <- 'Short-term boost (NEWS vs. TWITTER)'
     xlab <- 'Average boost difference'
     outfile <- sprintf('%s/age_coefs_NEWS-VS_TWITTER_%s%s.pdf', PLOTDIR, outcome, suffix)
   } else if (outcome == 'perm_boost_diff') {
-    main <- 'Long-term boost'
+    main <- 'Long-term boost (NEWS vs. TWITTER)'
     xlab <- 'Average boost difference'
     outfile <- sprintf('%s/age_coefs_NEWS-VS_TWITTER_%s%s.pdf', PLOTDIR, outcome, suffix)
   } else {
