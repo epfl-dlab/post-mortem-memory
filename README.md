@@ -1,6 +1,9 @@
 # Postmortem memory of public figures in news and social media
 
-This repository contains code and data for the paper **"Postmortem memory of public figures in news and social media"** by Robert West, Jure Leskovec, and Christopher Potts ([pre-print](http://arxiv.org/abs/2103.15497) available on arXiv).
+This repository contains code and data for the following paper:
+
+> Robert West, Jure Leskovec, and Christopher Potts. **Postmortem memory of public figures in news and social media.** *Proceedings of the National Academy of Sciences,* September 2021, 118 (38) e2106152118. [[PDF]](https://doi.org/10.1073/pnas.2106152118)
+
 
 The notebook that executes all analyses described in the main paper and in the Supplemental Information is `post_mortem_memory.Rmd`, which is also available as an [executed and rendered version](https://epfl-dlab.github.io/post-mortem-memory/post_mortem_memory.html).
 
